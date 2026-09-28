@@ -1,0 +1,60 @@
+{
+  "name": "PACKAGE",
+  "version": "1.0.0",
+  "description": "DESCRIPTION",
+  "keywords": [],
+  "license": "LICENSE",
+  "author": "AUTHOR",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/USERNAME/REPO"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "pnpm build",
+    "build": "tsdown",
+    "test": "vitest",
+    "lint": "oxlint --fix",
+    "lint:ci": "oxlint",
+    "format": "oxfmt --write",
+    "format:ci": "oxfmt --check",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.3",
+    "@total-typescript/tsconfig": "^1.0.4",
+    "@types/node": "^25.9.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7",
+    "oxfmt": "^0.54.0",
+    "oxlint": "^1.69.0",
+    "oxlint-tsgolint": "^0.23.0",
+    "pkg-pr-new": "^0.0.75",
+    "publint": "^0.3.21",
+    "tsdown": "^0.22.2",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "lint-staged": {
+    "*.{js,ts,tsx,jsx}": [
+      "pnpm lint",
+      "pnpm format"
+    ],
+    "*.{json,jsonc}": [
+      "pnpm format"
+    ]
+  },
+  "packageManager": "pnpm@10.29.2"
+}
