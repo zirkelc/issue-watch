@@ -222,8 +222,8 @@ new RuleTester().run('issue', createIssueRule(provider), {
       errors: [{ message: 'o/r#11 "Crash on start" was closed as not planned on 2026-09-11.' }],
     },
     {
-      code: '// FIXME(o/r#1, o/r#11)',
-      errors: [{ messageId: 'notPlanned', column: 16 }],
+      code: '// TODO(o/r#1, o/r#11)',
+      errors: [{ messageId: 'notPlanned', column: 15 }],
     },
   ],
 });

@@ -1,7 +1,7 @@
 /**
  * Keywords that mark a comment as a watched TODO when no other keywords are configured.
  */
-export const DEFAULT_KEYWORDS: Array<string> = ['TODO', 'FIXME'];
+export const DEFAULT_KEYWORDS: Array<string> = ['TODO'];
 
 /**
  * A whitespace-separated piece of text with its offsets in the parsed string.

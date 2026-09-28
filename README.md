@@ -13,16 +13,16 @@
 
 </div>
 
+<p align="center">
+  <img src="assets/screenshot.png" alt="Oxlint output with a todo-watch warning for a closed issue and one for a merged pull request" width="800" />
+</p>
+
 This library checks `TODO(...)` comments that link a GitHub issue or pull request, and tells you when the linked issue is closed or the linked pull request is merged. You can use it in two ways:
 
 - **Standalone:** run `npx todo-watch` when you want to know what changed, by hand, in CI, or from a coding agent.
 - **As lint rules:** add it to [Oxlint](https://oxc.rs/docs/guide/usage/linter/js-plugins) or [ESLint](https://eslint.org/docs/latest/use/configure/plugins), and see the status of each linked issue in your editor and lint output.
 
 Both ways run the same checks, print the same messages, and share one cache.
-
-<p align="center">
-  <img src="assets/screenshot.png" alt="Oxlint output with a todo-watch warning for a closed issue and one for a merged pull request" width="800" />
-</p>
 
 ## Why?
 
@@ -49,21 +49,21 @@ A GitHub token is needed to read issues and pull requests. It is read from `GITH
 
 ### The TODO Format
 
-Put a GitHub reference in the parentheses of a `TODO` or `FIXME` comment. The reference is a full URL, as you copy it from the browser, the short form `owner/repo#123`, or `#123` for an issue in your own repository:
+Put a GitHub reference in the parentheses of a `TODO` comment. The reference is a full URL, as you copy it from the browser, the short form `owner/repo#123`, or `#123` for an issue in your own repository:
 
 ```ts
 // TODO(https://github.com/vitest-dev/vitest/issues/11361): remove the manual mock alias
 export const alias = { '@app/utils': './packages/app-utils/src' };
 ```
 
-Nothing else is needed. Existing comments in this format are checked as they are.
+Nothing else is needed. Existing comments in this format are checked as they are. To also check other keywords like `FIXME` or `HACK`, use `--keywords` in the CLI or the `keywords` setting.
 
 ```ts
 /** A URL keeps its path and hash, and stays clickable in the editor. */
 // TODO(https://github.com/vitest-dev/vitest/issues/11363#issuecomment-5866925885)
 
 /** The short form. */
-// FIXME(vitest-dev/vitest#11363)
+// TODO(vitest-dev/vitest#11363)
 
 /** An issue or pull request in the repository of your project. */
 // TODO(#42)
@@ -92,7 +92,7 @@ src/alias.ts:1:9  warning  issue
   URL: https://github.com/vitest-dev/vitest/issues/11361
   Next: keep the comment until a release contains the fix, then upgrade and remove the comment.
 
-src/reporter.ts:3:10  warning  pull-request
+src/reporter.ts:3:9  warning  pull-request
   oxc-project/oxc#27134 "refactor(ast)!: remove unused `CallExpression::is_symbol_or_symbol_for_call`" was merged on 2026-09-28, not released yet.
   URL: https://github.com/oxc-project/oxc/pull/27134
   Next: keep the comment until a release contains the fix, then upgrade and remove the comment.
@@ -249,7 +249,7 @@ In the lint config, options go after the severity. You can give each rule its ow
 | `--fail-on <level>`      | `error`      | Exit with `1` on `error`, on `warn`, or never (`none`)             |
 | `--rules <list>`         | all          | Checks to run                                                      |
 | `--ref <owner/repo#123>` | all          | Check only this reference. Can be repeated                         |
-| `--keywords <list>`      | `TODO,FIXME` | Comment keywords                                                   |
+| `--keywords <list>`      | `TODO`       | Comment keywords                                                   |
 | `--repo <owner/name>`    | detected     | Repository of `#123` references                                    |
 | `--fix`                  | off          | Update moved references, and short ones with `--expand-short-refs` |
 | `--cache-ttl <minutes>`  | `60`         | How long fetched statuses stay valid                               |
@@ -287,7 +287,7 @@ Settings are shared by all rules and go under `settings["todo-watch"]`:
 | Setting    | Default             | Description                                                         |
 | ---------- | ------------------- | ------------------------------------------------------------------- |
 | `network`  | `fetch`             | `fetch`, `cache-only` or `off`, see [Using Both](#using-both)       |
-| `keywords` | `["TODO", "FIXME"]` | Comment keywords                                                    |
+| `keywords` | `["TODO"]`          | Comment keywords                                                    |
 | `cacheTtl` | `60`                | How long fetched statuses stay valid, in minutes                    |
 | `prefetch` | `true`              | On the first reference, fetch all references of the project at once |
 | `verbose`  | `true`              | Add the URL and the next step below the first line of a message     |

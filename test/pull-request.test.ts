@@ -110,8 +110,8 @@ new RuleTester().run('pull-request', createPullRequestRule(provider), {
       errors: [{ message: 'o/r#20 "Fix crash on start" was merged on 2026-09-20, not released yet.' }],
     },
     {
-      code: '// FIXME(o/r#2, o/r#21)',
-      errors: [{ messageId: 'closedUnmerged', column: 16 }],
+      code: '// TODO(o/r#2, o/r#21)',
+      errors: [{ messageId: 'closedUnmerged', column: 15 }],
     },
   ],
 });

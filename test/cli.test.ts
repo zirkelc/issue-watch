@@ -80,7 +80,7 @@ describe('check', () => {
     const cwd = project({
       'src/a.ts': `// TODO(o/r#2)\nexport const a = 1;\n`,
       'docs/notes.md': `Waiting for TODO(o/r#1).\n`,
-      'scripts/run.py': `# FIXME(o/r#3 please)\n`,
+      'scripts/run.py': `# TODO(o/r#3 please)\n`,
       'node_modules/dep/index.js': `// TODO(o/r#2)\n`,
     });
 
@@ -256,7 +256,7 @@ describe('run', () => {
 
   test(`should fix files`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': '// TODO(old/name#3): use the new option\n// FIXME(o/r#3)\n' });
+    const cwd = project({ 'a.ts': '// TODO(old/name#3): use the new option\n// TODO(o/r#3)\n' });
 
     // Act
     const { code, stderr } = await runCli(['--fix', '--expand-short-refs'], cwd);
@@ -265,7 +265,7 @@ describe('run', () => {
     expect(code).toBe(0);
     expect(stderr).toBe('Applied 3 changes.\n');
     expect(readFileSync(join(cwd, 'a.ts'), 'utf8')).toBe(
-      '// TODO(https://github.com/o/r/issues/3): use the new option\n// FIXME(https://github.com/o/r/issues/3)\n',
+      '// TODO(https://github.com/o/r/issues/3): use the new option\n// TODO(https://github.com/o/r/issues/3)\n',
     );
   });
 

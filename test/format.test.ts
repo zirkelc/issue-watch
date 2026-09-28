@@ -11,7 +11,9 @@ tester.run('format', formatRule, {
   valid: [
     '// TODO(https://github.com/o/r/issues/1)',
     '// TODO(https://github.com/o/r/pull/2#issuecomment-99): use the new option',
-    '// FIXME(o/r#1, o/r#2)',
+    '// TODO(o/r#1, o/r#2)',
+    /** FIXME is not a keyword by default. */
+    '// FIXME(zirkelc https://github.com/o)',
     '/** TODO(o/r#1) */',
     '/*\n * TODO(\n *   o/r#1\n * )\n */',
     '// TODO: plain todo',

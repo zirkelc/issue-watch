@@ -78,7 +78,7 @@ describe('parseTodos', () => {
 
   test(`should parse multiple entries`, () => {
     // Arrange
-    const text = 'FIXME(o/r#1,  https://github.com/o/r/pull/2 )';
+    const text = 'TODO(o/r#1,  https://github.com/o/r/pull/2 )';
 
     // Act
     const todos = parseTodos(text);
