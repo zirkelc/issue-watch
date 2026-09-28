@@ -1,13 +1,27 @@
 {
-  "name": "PACKAGE",
+  "name": "todo-watch",
   "version": "1.0.0",
-  "description": "DESCRIPTION",
-  "keywords": [],
-  "license": "LICENSE",
-  "author": "AUTHOR",
+  "description": "Watch GitHub issues and PRs linked in TODO comments",
+  "keywords": [
+    "cli",
+    "eslint",
+    "eslint-plugin",
+    "eslintplugin",
+    "github",
+    "issues",
+    "oxlint",
+    "oxlint-plugin",
+    "pull-requests",
+    "todo"
+  ],
+  "license": "MIT",
+  "author": "Chris Cook",
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/REPO"
+    "url": "git+https://github.com/zirkelc/todo-watch.git"
+  },
+  "bin": {
+    "todo-watch": "./dist/cli.mjs"
   },
   "files": [
     "dist"
@@ -16,6 +30,8 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": "./dist/index.mjs",
+    "./eslint": "./dist/eslint.mjs",
+    "./oxlint": "./dist/oxlint.mjs",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -31,6 +47,10 @@
     "format:ci": "oxfmt --check",
     "prepare": "husky"
   },
+  "dependencies": {
+    "@oxlint/plugins": "^1.85.0",
+    "synckit": "^0.11.13"
+  },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
     "@total-typescript/tsconfig": "^1.0.4",
@@ -38,7 +58,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.0.7",
     "oxfmt": "^0.54.0",
-    "oxlint": "^1.69.0",
+    "oxlint": "^1.85.0",
     "oxlint-tsgolint": "^0.23.0",
     "pkg-pr-new": "^0.0.75",
     "publint": "^0.3.21",

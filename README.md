@@ -1,180 +1,507 @@
-# TypeScript Single Package Project Template
+<div align="center">
 
-This template provides an opinionated setup for a single package TypeScript project.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="assets/logo-light.png" />
+  <img src="assets/logo-light.png" alt="todo-watch logo" width="400" />
+</picture>
 
-## 🚀 Features
+<p align="center">Watch GitHub issues and PRs linked in TODO comments</p>
+<p align="center">
+  <a href="https://www.npmjs.com/package/todo-watch" alt="todo-watch"><img src="https://img.shields.io/npm/dt/todo-watch?label=todo-watch"></a> <a href="https://github.com/zirkelc/todo-watch/actions/workflows/ci.yml" alt="CI"><img src="https://img.shields.io/github/actions/workflow/status/zirkelc/todo-watch/ci.yml?branch=main"></a>
+</p>
 
-- [PNPM](https://pnpm.io/) for efficient package management
-- [Oxlint](https://oxc.rs/docs/guide/linter/cli) and [Oxfmt](https://oxc.rs/docs/guide/formatter/cli) for linting and formatting
-- [Vitest](https://vitest.dev/) for fast, modern testing
-- [tsdown](https://github.com/rolldown/tsdown) for TypeScript building and bundling
-- [tsx](https://tsx.is/) for running TypeScript files
-- [Husky](https://github.com/typicode/husky) for Git hooks
-- [lint-staged](https://github.com/lint-staged/lint-staged) for running linting on staged files
-- [GitHub Actions](.github/workflows/ci.yml) for continuous integration
-- [VSCode](.vscode/) debug configuration and editor settings
-- [@total-typescript/tsconfig](https://github.com/total-typescript/tsconfig) for TypeScript configuration
-- [Are The Types Wrong?](https://github.com/arethetypeswrong/arethetypeswrong.github.io) for type validation
-- [publint](https://github.com/publint/publint) for package.json validation
-- [EditorConfig](https://editorconfig.org/) for consistent coding styles
+</div>
 
-## 🚀 Getting Started
+This library reads `TODO(...)` comments that link a GitHub issue or pull request, and reports when the linked issue or pull request changes: it is closed or merged, it gets new comments, a pull request is linked, or a fix is released. It is a command line tool, a plugin for [Oxlint JS plugins](https://oxc.rs/docs/guide/usage/linter/js-plugins) and [ESLint](https://eslint.org/docs/latest/use/configure/plugins), and a small API.
 
-### 1. Create a new repository
+## Why?
 
-Create a new repository [using this template](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template)
+You link an upstream issue or pull request next to a workaround, and then you forget it. However, you want to know when:
 
-### 2. Replace placeholders
+- **A fix lands**: The upstream pull request is merged, or it is contained in a release, so the workaround can go
+- **An issue is resolved**: It is closed as completed, as not planned, or as a duplicate of another issue
+- **Something new happens**: New comments, a reopen, an approval, or a pull request that will close the issue
+- **A link goes bad**: The repo was renamed, the issue was transferred, or it does not exist
 
-Replace all occurrences of the following placeholders in [`package.json`](package.json) with the correct values:
+This library checks all linked references when you ask for it, or during your normal lint run, and tells you only what changed since you last looked.
 
-| Placeholder   | Field            | Description                             |
-| ------------- | ---------------- | --------------------------------------- |
-| `PACKAGE`     | `name`           | Your npm package name                   |
-| `DESCRIPTION` | `description`    | Your package description                |
-| `LICENSE`     | `license`        | Your license (`MIT`, `Apache-2.0`, ...) |
-| `AUTHOR`      | `author`         | Your name                               |
-| `USERNAME`    | `repository.url` | Your GitHub username                    |
-| `REPO`        | `repository.url` | Your GitHub repository name             |
+## Installation
 
-### 3. Apply ToDos
-
-Find all occurrences of `TODO` and apply them:
-
-| TODO            | File                                                        | Description                                                       |
-| --------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
-| `TODO: PREVIEW` | `.github/workflows/ci.yml`                                  | Create [preview releases](#preview-releases)                      |
-| `TODO: RELEASE` | `.github/workflows/ci.yml`, `.github/workflows/release.yml` | [Release with Release Please](#release-please) and publish to NPM |
-
-### 4. Install, Build, Test
-
-Verify your project is working by running `install`, `build`, and `test`:
-
-```sh
-pnpm install
-pnpm build
-pnpm test
+```bash
+npm install --save-dev todo-watch
 ```
 
-Happy coding! 🎉
+Or run it without installation:
 
-## 📋 Details
+```bash
+npx todo-watch
+```
 
-### Package
+The checks need a GitHub token. They use `GITHUB_TOKEN` or `GH_TOKEN`. If neither is set, they ask the [GitHub CLI](https://cli.github.com/) with `gh auth token`.
 
-The [`package.json`](package.json) is configured as ESM (`"type": "module"`) and ships an ESM-only build. The `exports` map points consumers at `./dist/index.mjs` along with the matching type declarations, so the package can be consumed via `import` from any modern ESM project. Consumers stuck on CommonJS can still load it via dynamic `import()`.
+## How It Works
 
-The `exports` field does not need to be maintained by hand: tsdown's `exports: true` option (in [`tsdown.config.ts`](tsdown.config.ts)) regenerates `exports` (and `main` / `module` / `types`) on every build based on the actual entries it produced, so any new `src/**/index.ts` entry shows up in the published package automatically.
+The CLI and the lint rules run the same checks and share one cache file. The CLI fetches all references with batched GraphQL requests and writes the cache. The lint rules either fetch too, or only read the cache that the CLI wrote.
 
-If you later need to support CommonJS consumers as well, switch to dual publishing by setting `format: ['esm', 'cjs']` in [`tsdown.config.ts`](tsdown.config.ts). tsdown will then emit both `dist/index.mjs` and `dist/index.cjs` (plus matching `.d.mts` and `.d.cts` declarations) and rewrite `exports` into the conditional `import` / `require` form. No manual `package.json` edits required.
+```mermaid
+sequenceDiagram
+    participant CLI as todo-watch CLI
+    participant Rule as Lint rule
+    participant Worker as Worker thread
+    participant Cache as Cache file
+    participant GitHub
 
-### Oxlint & Oxfmt
+    rect rgb(240, 248, 255)
+        Note over CLI,GitHub: npx todo-watch
+        CLI->>Cache: read
+        CLI->>GitHub: one GraphQL query for all refs, tags for merged pull requests
+        CLI->>Cache: write
+    end
 
-[Oxlint](https://oxc.rs/docs/guide/linter/cli) and [Oxfmt](https://oxc.rs/docs/guide/formatter/cli) are Rust-based replacements for ESLint and Prettier with much faster execution. [`./.oxlintrc.json`](.oxlintrc.json) and [`./.oxfmtrc.json`](.oxfmtrc.json) contain the default configurations. They complement the formatter settings from the [`.editorconfig`](.editorconfig) file, which is read by both tools so indentation, line endings and final-newline behavior stay consistent.
+    rect rgb(245, 245, 245)
+        Note over Rule,GitHub: Lint with "network": "fetch" (default)
+        Rule->>Worker: status of refs in this file
+        Worker->>GitHub: fetch refs that are not in the cache or too old
+        Worker->>Cache: write
+        Worker-->>Rule: statuses
+    end
 
-### Vitest
+    rect rgb(240, 255, 240)
+        Note over Rule,Cache: Lint with "network": "cache-only"
+        Rule->>Cache: read, no requests
+    end
+```
 
-An empty Vitest config is provided in [`vitest.config.ts`](vitest.config.ts) as a starting point. By default Vitest discovers any `*.test.ts` (or `*.spec.ts`) files in the project, so tests can live next to the code they cover (under `src/`) or in a dedicated [`test/`](test/) folder.
+## Usage
 
-### Build and Run
+Link an issue or pull request in a `TODO` comment:
 
-- `tsdown` builds every `src/**/index.ts` entry into ESM (`dist/index.mjs`) along with type declarations (`dist/index.d.mts`). Build options, including the `attw` and `publint` integrations, live in [`tsdown.config.ts`](tsdown.config.ts).
-- `tsx` compiles and runs TypeScript files on-the-fly, useful for ad-hoc scripts and local debugging without a build step.
+```ts
+// TODO(https://github.com/vitest-dev/vitest/issues/11363): remove this workaround
+export const pool = 'forks';
+```
 
-### Git Hooks
+Run the CLI. `--fix` adds the `seen` marker that records when you last looked:
 
-[Husky](https://github.com/typicode/husky) runs the [.husky/pre-commit](.husky/pre-commit) hook before every commit, which delegates to lint-staged so only staged files are linted and formatted. This keeps commits fast even in larger repos and prevents broken style from landing on `main`.
+```bash
+npx todo-watch --fix
+```
 
-### Continuous Integration
+```ts
+// TODO(https://github.com/vitest-dev/vitest/issues/11363 seen=2026-09-28T10:03Z): remove this workaround
+```
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) defines a GitHub Actions workflow that runs on every push and pull request. It executes two jobs in parallel: `lint` (Oxlint and Oxfmt in check mode) and `test` (build followed by Vitest). Optional `preview` and `release` jobs in the same file are commented out and can be enabled via the `TODO` markers.
+From then on, `npx todo-watch` reports what happens upstream:
 
-### VSCode Integration
+```
+src/b.ts:1:9  warning  activity
+  vitest-dev/vitest#11376 "docs: document cwd behavior on projects" was updated since 2025-01-01T00:00Z: ready for review, approved by AriPerkkio.
+  URL: https://github.com/vitest-dev/vitest/pull/11376
+  Next: read the news and update the code if needed. Then mark it as seen: replace "seen=2025-01-01T00:00Z" with "seen=2026-09-28T11:18Z", or run `todo-watch --mark-seen --ref vitest-dev/vitest#11376`.
 
-#### Debugging
+src/b.ts:3:10  warning  resolved
+  oxc-project/oxc#27134 "refactor(ast)!: remove unused `CallExpression::is_symbol_or_symbol_for_call`" was merged on 2026-09-28, not released yet.
+  URL: https://github.com/oxc-project/oxc/pull/27134
+  Next: keep the workaround until a release contains the fix. Then upgrade and remove the TODO and its workaround.
 
-[`.vscode/launch.json`](.vscode/launch.json) provides VSCode launch configurations:
+2 problems (0 errors, 2 warnings) in 2 references.
+```
 
-- `Debug (tsx)`: Run and debug TypeScript files
-- `Test (vitest)`: Debug tests
+### The TODO Format
 
-It uses the [JavaScript Debug Terminal](https://code.visualstudio.com/docs/nodejs/nodejs-debugging) to run and debug.
+Only references inside the parentheses of a keyword are checked. A plain link in a comment, or `TODO(username)`, is ignored. A reference is a full URL or the short form `owner/repo#123`. A URL can contain any path or hash that GitHub adds, and it is kept as it is.
 
-#### Editor Settings
+```ts
+/** A full URL is clickable in the editor. The hash is kept. */
+// TODO(https://github.com/vitest-dev/vitest/issues/11363#issuecomment-5866925885 seen=2026-09-28T10:03Z)
 
-[`.vscode/settings.json`](.vscode/settings.json) configures Oxfmt as the formatter and enables format-on-save.
+/** The short form. */
+// FIXME(vitest-dev/vitest#11363 seen=2026-09-28T10:03Z)
 
-### EditorConfig
+/** More than one reference, each with its own seen marker. */
+// TODO(vitest-dev/vitest#11363 seen=2026-09-28T10:03Z, oxc-project/oxc#27134 seen=2026-09-28T10:03Z)
 
-[`.editorconfig`](.editorconfig) ensures consistent coding styles across different editors and IDEs:
+/**
+ * Block comments work, also over more than one line.
+ * TODO(https://github.com/vitest-dev/vitest/pull/11376 seen=2026-09-28T10:03Z): drop the pool option
+ */
+```
 
-- Uses spaces for indentation (2 spaces)
-- Sets UTF-8 charset
-- Ensures LF line endings
-- Trims trailing whitespace (except in Markdown files)
-- Inserts a final newline in files
+The CLI reads any text file, so the format also works in Markdown, YAML, Python and other files.
 
-This configuration complements Oxfmt and helps maintain a consistent code style throughout the project.
+### The Seen Marker
 
-### Types Validation
+`seen=YYYY-MM-DDTHH:MMZ` records when you last reviewed a reference, in UTC with minute precision. The [`activity`](#checks) check reports only what happened after it. The marker is outside the URL, so the link stays clickable and you can paste a new URL without losing it.
 
-The project includes the [`@arethetypeswrong/cli`](https://github.com/arethetypeswrong/arethetypeswrong.github.io) tool to validate TypeScript types in your package. It checks that the type declarations resolve correctly for ESM consumers and that the published types match the actual runtime exports, catching common publishing mistakes. It is wired into `tsdown` (with the `esm-only` profile in [`tsdown.config.ts`](tsdown.config.ts)) and runs automatically during the build.
+```ts
+/** Everything in the minute of the marker counts as seen. */
+// TODO(vitest-dev/vitest#11363 seen=2026-09-28T10:03Z)
+```
 
-### Publint
+To mark new activity as seen, run `todo-watch --mark-seen`, apply the "Mark as seen" suggestion in your editor, or run `oxlint --fix-suggestions`. They write the time at which the status was fetched, not the current time, so nothing that happened after the fetch is lost.
 
-The project includes [`publint`](https://github.com/publint/publint) to validate your `package.json` against current packaging conventions, flagging issues like missing `exports` entries, mismatched `main`/`module`/`types` fields or files that would not actually be published. It is wired into `tsdown` and runs automatically during the build.
+> [!IMPORTANT]
+> `--fix` never marks activity as seen, because you should read it first. Do not put `--mark-seen` or `--fix-suggestions` in a pre-commit hook.
 
-## Optional
+### Checks
 
-### <a name="release-please"></a> Release with Release Please
+The CLI and the lint plugin run the same four checks. In the lint plugin, each check is a rule.
 
-[Release Please](https://github.com/googleapis/release-please-action) automates versioning, changelog generation and GitHub Releases based on [Conventional Commits](https://www.conventionalcommits.org/). The npm publish step runs in a separate workflow that uses [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers), so no `NPM_TOKEN` is required.
+| Check      | Network | Severity | What it reports                                                     | Fix                                                  |
+| ---------- | ------- | -------- | ------------------------------------------------------------------- | ---------------------------------------------------- |
+| `format`   | no      | `error`  | Invalid references and seen markers                                 | Adds a missing seen marker, expands short references |
+| `invalid`  | yes     | `error`  | References that do not exist or have moved, and GitHub errors       | Updates moved references                             |
+| `resolved` | yes     | `warn`   | Closed issues and merged or closed pull requests                    | Suggests the issue that a duplicate points to        |
+| `activity` | yes     | `warn`   | New activity on open issues and pull requests since the seen marker | Marks as seen with `--mark-seen`                     |
 
-#### Flow
+`resolved` reports a reference until you remove or change the TODO. A seen marker does not hide it.
 
-1. You merge conventional commits (`feat:`, `fix:`, ...) into `main`.
-2. The `release` job in [`ci.yml`](.github/workflows/ci.yml) runs Release Please, which opens (or updates) a release PR. The PR contains the bumped version in `package.json`, an updated `CHANGELOG.md` and a bumped `.release-please-manifest.json`.
-3. When you merge the release PR, Release Please creates a Git tag and a GitHub Release.
-4. Publishing the GitHub Release triggers [`release.yml`](.github/workflows/release.yml), which builds the package and runs `pnpm publish --provenance` against npm using Trusted Publishing.
+| Target       | State                 | Message                                                                            |
+| ------------ | --------------------- | ---------------------------------------------------------------------------------- |
+| Issue        | Closed as completed   | `closed as completed on <date> by <merged pull requests and their release>`        |
+| Issue        | Closed as not planned | `closed as not planned on <date>`                                                  |
+| Issue        | Closed as duplicate   | `closed as a duplicate of <issue> on <date>`, with a suggestion to link that issue |
+| Pull request | Merged                | `merged on <date>, released in <tag>` or `not released yet`                        |
+| Pull request | Closed without merge  | `closed without merge on <date>`                                                   |
 
-The two workflows are split so that release notes (handled by Release Please) and publishing (handled by npm with provenance) stay independent. The `release.yml` filename and workflow name must match what is registered with npm, so do not rename them.
+`activity` reports what happened on an open issue or pull request after its seen marker, in one message per reference.
 
-The release behavior is configured in [`release-please-config.json`](release-please-config.json) and the current released version is tracked in [`.release-please-manifest.json`](.release-please-manifest.json).
+| Target                 | Activity                                                                                                       |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Issue and pull request | New comments (with the first one as an excerpt), reopened                                                      |
+| Issue                  | Linked to a pull request that will close it, linked pull request merged (with release) or closed without merge |
+| Pull request           | Ready for review, converted to draft, approved, changes requested                                              |
+| Both, with `include`   | Labels added, milestone set                                                                                    |
 
-To enable this, apply the `TODO: RELEASE` markers in both workflow files. You also need to perform the two setup steps below.
+### CLI
 
-#### Setup: Release Please token
+`todo-watch [options] [paths...]` checks all tracked and not ignored files below the paths. Paths default to the current directory. `node_modules` is always skipped.
 
-Release Please needs a token that can push commits and open pull requests. The default `GITHUB_TOKEN` works, but releases (and tags) created with it [do not trigger other workflows](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow), which means `release.yml` would never run. To fix this, create a Personal Access Token and expose it as `RELEASE_PLEASE_TOKEN`.
+```bash
+npx todo-watch                                    # all files
+npx todo-watch src docs                           # only these paths
+npx todo-watch --ref vitest-dev/vitest#11363      # only this reference
+npx todo-watch --rules resolved,activity          # only these checks
+npx todo-watch --format json                      # for agents and scripts
+npx todo-watch --format markdown                  # for a pull request comment or an issue
+npx todo-watch --fix                              # add seen markers, update moved references
+npx todo-watch --mark-seen --ref vitest-dev/vitest#11363
+```
 
-1. Create a [fine-grained PAT](https://github.com/settings/personal-access-tokens/new) (or a classic PAT with the `repo` scope) with the following repository permissions:
-   - `Contents`: Read and write (push commits, create tags and releases)
-   - `Pull requests`: Read and write (open release PRs)
-2. In your repository, open `Settings` → `Secrets and variables` → `Actions` → `New repository secret`.
-3. Name it `RELEASE_PLEASE_TOKEN` and paste the PAT.
+| Option                    | Default      | Description                                                           |
+| ------------------------- | ------------ | --------------------------------------------------------------------- |
+| `--format <format>`       | `text`       | `text`, `json` or `markdown`                                          |
+| `--quiet`                 | off          | Report errors only                                                    |
+| `--compact`               | off          | Print only the first line of each message                             |
+| `--fail-on <level>`       | `error`      | Exit with `1` on `error`, `warn` or `none`                            |
+| `--rules <list>`          | all          | Checks to run                                                         |
+| `--ref <owner/repo#123>`  | all          | Check only this reference. Can be repeated                            |
+| `--keywords <list>`       | `TODO,FIXME` | Comment keywords                                                      |
+| `--fix`                   | off          | Add missing seen markers, update moved references                     |
+| `--mark-seen`             | off          | Mark new activity as seen. Use `--ref` to limit it                    |
+| `--ignore-authors <list>` | `bots`       | Logins to ignore, plus the presets `bots` and `self` (the token user) |
+| `--include <list>`        | none         | Also report `labels` and `milestones`                                 |
+| `--wait-for-release`      | off          | Report merged pull requests only when a release contains them         |
+| `--expand-short-refs`     | off          | Report short references. `--fix` replaces them with URLs              |
+| `--cache-ttl <minutes>`   | `60`         | How long fetched statuses stay valid                                  |
+| `--no-cache`              | off          | Fetch all statuses again                                              |
 
-See the [release-please-action credentials docs](https://github.com/googleapis/release-please-action?tab=readme-ov-file#github-credentials) for more details.
+The exit code is `0` if nothing is reported at or above `--fail-on`, `1` if something is, and `2` for invalid options. Changes from `--fix` and `--mark-seen` are counted on stderr, so `--format json` keeps stdout clean.
 
-#### Setup: npm Trusted Publishing
+The CLI has no config file. Put the options you always use into a script:
 
-Trusted Publishing lets GitHub Actions publish to npm via OIDC, without long-lived tokens. The npm registry verifies the workflow identity (repo, workflow filename, environment) on each publish.
+```json
+{
+  "scripts": {
+    "todos": "todo-watch --keywords TODO,FIXME,HACK --ignore-authors bots,self --wait-for-release"
+  }
+}
+```
 
-1. Publish the package once manually (`npm publish`) so it exists on npm. Your npm account needs publish rights on the package.
-2. Open `https://www.npmjs.com/package/<your-package>/access`.
-3. In the `Trusted Publisher` section, click `Add Trusted Publisher` and select GitHub Actions, then enter:
-   - Organization or user: your GitHub user or org
-   - Repository: your repository name
-   - Workflow filename: `release.yml`
-   - Environment: leave empty (unless you use one)
-4. Save. From now on, the `release.yml` workflow can publish without an `NPM_TOKEN`. The `id-token: write` permission in the workflow is what enables OIDC.
+### Lint Plugin
 
-See the [npm Trusted Publishers docs](https://docs.npmjs.com/trusted-publishers) for more details.
+Add the plugin to `.oxlintrc.json` and enable the rules:
 
-### <a name="preview-releases"></a> Preview Releases
+```jsonc
+{
+  "jsPlugins": ["todo-watch/oxlint"],
+  "rules": {
+    "todo-watch/format": "error",
+    "todo-watch/invalid": "error",
+    "todo-watch/resolved": "warn",
+    // ignoreAuthors defaults to ["bots"], include defaults to []
+    "todo-watch/activity": ["warn", { "ignoreAuthors": ["bots", "self"], "include": ["labels"] }],
+  },
+}
+```
 
-[pkg.pr.new](https://github.com/stackblitz-labs/pkg.pr.new) publishes a throwaway version of the package for every push and pull request, with an installable URL like `npm i https://pkg.pr.new/<owner>/<repo>@<sha>`. This lets you (or a reviewer) try a change in a real consumer project before it gets merged or released, without polluting the npm registry with prerelease versions.
+The rule options match the CLI options:
 
-Setup:
+| Rule                  | Option              | Default    | CLI option            |
+| --------------------- | ------------------- | ---------- | --------------------- |
+| `todo-watch/format`   | `expandShortRefs`   | `false`    | `--expand-short-refs` |
+| `todo-watch/invalid`  | `reportUnavailable` | `true`     | none                  |
+| `todo-watch/resolved` | `waitForRelease`    | `false`    | `--wait-for-release`  |
+| `todo-watch/activity` | `ignoreAuthors`     | `["bots"]` | `--ignore-authors`    |
+| `todo-watch/activity` | `include`           | `[]`       | `--include`           |
 
-1. Install the GitHub App: [pkg.pr.new](https://github.com/apps/pkg-pr-new).
-2. Apply the `TODO: PREVIEW` marker in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+`reportUnavailable` reports once per file if GitHub cannot be reached or no token is found. In the editor, "Mark as seen" is a suggestion of the `activity` rule. `oxlint --fix` applies only the fixes of `format` and `invalid`.
+
+Settings are shared by all rules:
+
+```jsonc
+{
+  "settings": {
+    "todo-watch": {
+      // network defaults to "fetch". "cache-only" reads the cache that the CLI wrote, "off" skips GitHub.
+      "network": "fetch",
+      // keywords defaults to ["TODO", "FIXME"]
+      "keywords": ["TODO", "FIXME", "HACK"],
+      // cacheTtl defaults to 60 (minutes)
+      "cacheTtl": 30,
+      // prefetch defaults to true
+      "prefetch": true,
+      // verbose defaults to true
+      "verbose": true,
+    },
+  },
+}
+```
+
+### Fast Linting
+
+With `"network": "fetch"`, the first lint run without cache waits a few seconds for GitHub, and the editor waits too. To keep linting as fast as without the plugin, let the lint rules read only the cache, and refresh the cache with the CLI when you want new statuses:
+
+```jsonc
+{
+  "jsPlugins": ["todo-watch/oxlint"],
+  "settings": { "todo-watch": { "network": "cache-only" } },
+}
+```
+
+```bash
+npx todo-watch   # fetches all references and fills the cache that the lint rules read
+```
+
+In `cache-only` mode, a reference that is not in the cache gets no status report. The `format` rule still checks it. `"network": "off"` turns off the three network rules completely.
+
+### ESLint
+
+The plugin uses the standard rule API, so it also works in ESLint 9 with flat config. `configs.recommended` enables all four rules with the severities from the [checks table](#checks).
+
+```js
+import todoWatch from 'todo-watch/eslint';
+
+export default [todoWatch.configs.recommended];
+```
+
+### Messages for Agents
+
+Lint and CLI runs are often done by coding agents, so every message carries enough context to act without opening GitHub first. The first line names the reference with its title and says what changed. The next lines give the first new comment (as an excerpt of 200 characters), the URL, and the next step, with the exact text to write for the seen marker. For scripts, `--format json` gives the same content as fields.
+
+```jsonc
+{
+  "settings": {
+    // verbose defaults to true. false keeps only the first line of each lint message.
+    "todo-watch": { "verbose": false },
+  },
+}
+```
+
+> [!NOTE]
+> Oxlint's default reporter prints each message on one line. The detail lines then follow the first line, separated by spaces. Use `--format=stylish` to see them on their own lines. ESLint and the CLI always print them on their own lines.
+
+## Advanced
+
+### Cache
+
+Statuses are cached in `node_modules/.cache/todo-watch/github.json`, or in the temp directory if the project has no `node_modules`. They stay valid for `cacheTtl` minutes (`--cache-ttl` in the CLI). "Not found" results are cached too. Network and token errors are not cached, and a long-running editor session retries them after one minute. A release that contains a merge commit is cached forever.
+
+> [!TIP]
+> In CI, cache `node_modules/.cache/todo-watch` between runs. Otherwise every CI run fetches all references once.
+
+### Prefetch
+
+With `prefetch`, the first file with a reference in a lint run triggers a scan of all JavaScript and TypeScript files in the project, and all references are fetched at once. A cold run then takes seconds instead of one request per file. Set `prefetch` to `false` if you lint only a few files of a very large repository. The CLI always fetches all references of the checked files at once.
+
+### Releases
+
+For a merged pull request, the 50 newest tags of the repo are loaded. The compare API then finds the oldest tag after the merge that contains the merge commit. At most 5 tags are checked.
+
+> [!NOTE]
+> If the merge is older than all 50 tags, the first release cannot be found. It is then reported as `released in <tag> or earlier`. In a monorepo, the tag can belong to a different package than the one you use.
+
+### Limitations
+
+> [!IMPORTANT]
+>
+> - Only GitHub.com is supported. GitHub Enterprise, GitLab, and Jira references are ignored.
+> - Only the last 50 comments and the last 100 timeline events of each issue are fetched. On very busy issues, older activity after the seen marker can be missed.
+> - The lint plugin checks only JavaScript and TypeScript files, because Oxlint JS plugins run only on those. The CLI checks all text files.
+> - The CLI reads keywords in any text, not only in comments. A `TODO(owner/repo#123)` inside a string is checked too.
+
+## API
+
+### `check(options?)`
+
+```ts
+function check(options?: CheckOptions): Promise<CheckResult>;
+```
+
+Runs the checks of the CLI and returns the findings of each file. `paths` defaults to `['.']`, `rules` to all checks, `keywords` to `['TODO', 'FIXME']`, and `cacheTtl` to `60` minutes. Offsets in the findings refer to the text of the file.
+
+```ts
+import { check, formatMessage } from 'todo-watch';
+
+const result = await check({ paths: ['src'], rules: ['resolved'], resolved: { waitForRelease: true } });
+
+for (const file of result.files) {
+  for (const finding of file.findings) console.log(file.path, formatMessage(finding, true));
+}
+```
+
+### `parseTodos(text, keywords?)`
+
+```ts
+function parseTodos(text: string, keywords?: Array<string>): Array<TodoComment>;
+// parseTodos('TODO(o/r#1 seen=2026-09-28T10:03Z)')[0].entries[0].ref: { kind: 'short', owner: 'o', repo: 'r', number: 1, ... }
+```
+
+Finds all `KEYWORD(...)` occurrences in a text and parses their entries. Offsets are relative to `text`. `keywords` defaults to `['TODO', 'FIXME']`.
+
+### `parseRef(token)`
+
+```ts
+function parseRef(token: Token): TodoRef | undefined;
+// parseRef({ text: 'https://github.com/o/r/pull/2/files', start: 0, end: 35 }): { kind: 'url', owner: 'o', repo: 'r', number: 2, ... }
+// parseRef({ text: 'o/r', start: 0, end: 3 }): undefined
+```
+
+Parses a full URL or a short reference.
+
+### `parseSeen(value)` / `formatSeen(date)`
+
+```ts
+function parseSeen(value: string): Date | undefined;
+function formatSeen(date: Date): string;
+// parseSeen('2026-02-30T10:00Z'): undefined
+// formatSeen(new Date('2026-09-28T10:03:59Z')): '2026-09-28T10:03Z'
+```
+
+Parse and format the value of a seen marker, with minute precision in UTC.
+
+### `toRefUrl(ref)`
+
+```ts
+function toRefUrl(ref: { owner: string; repo: string; number: number }): string;
+// toRefUrl({ owner: 'o', repo: 'r', number: 1 }): 'https://github.com/o/r/issues/1'
+```
+
+### `formatMessage(finding, verbose)`
+
+```ts
+function formatMessage(finding: Pick<Finding, 'summary' | 'details'>, verbose: boolean): string;
+```
+
+Builds the message text as the lint rules print it. Without `verbose`, only the first line is kept.
+
+### Plugin: default export
+
+```ts
+import todoWatch from 'todo-watch/oxlint'; // or 'todo-watch/eslint'
+// todoWatch: TodoWatchPlugin
+```
+
+The plugin with all four rules and `configs.recommended`. Both subpaths export the same plugin.
+
+### Plugin: `createPlugin(provider)`
+
+```ts
+function createPlugin(provider: StatusProvider): TodoWatchPlugin;
+```
+
+Creates the plugin with your own status provider, for example to test your config without network access. The provider is called once per file with all references of that file. It returns a result for each reference, keyed by the lowercased `owner/repo#number`.
+
+```ts
+import { createPlugin } from 'todo-watch/oxlint';
+
+const offline = createPlugin((request) =>
+  Object.fromEntries(
+    request.refs.map((ref) => [
+      `${ref.owner}/${ref.repo}#${ref.number}`.toLowerCase(),
+      { ok: false, reason: 'unavailable', message: 'offline', fetchedAt: new Date().toISOString() },
+    ]),
+  ),
+);
+```
+
+### Plugin: `recommendedRules`
+
+```ts
+const recommendedRules: {
+  'todo-watch/format': 'error';
+  'todo-watch/invalid': 'error';
+  'todo-watch/resolved': 'warn';
+  'todo-watch/activity': 'warn';
+};
+```
+
+The rule severities of `configs.recommended`, to spread into your own config.
+
+## Types
+
+### `CheckOptions`
+
+```ts
+import type { CheckOptions, CheckResult, FileReport, Finding } from 'todo-watch';
+// CheckOptions: { cwd?; paths?; rules?; refs?; keywords?; cacheTtl?; format?; resolved?; activity?; now?; getStatuses? }
+// CheckResult: { files: Array<FileReport>; refCount: number }
+// FileReport: { path: string; text: string; findings: Array<Finding> }
+// Finding: { rule; messageId; summary: string; details: Array<string>; token: Token; ref?: TodoRef; fix?: Edit; suggestion?: { messageId; description; edit: Edit } }
+```
+
+### Check options
+
+```ts
+import type { ActivityOptions, FormatOptions, InvalidOptions, ResolvedOptions } from 'todo-watch';
+// FormatOptions: { expandShortRefs: boolean }
+// InvalidOptions: { reportUnavailable: boolean }
+// ResolvedOptions: { waitForRelease: boolean }
+// ActivityOptions: { ignoreAuthors: Array<string>; include: Array<'labels' | 'milestones'> }
+```
+
+### `TodoWatchSettings`
+
+```ts
+import type { NetworkMode, TodoWatchSettings } from 'todo-watch/oxlint';
+// TodoWatchSettings: { keywords: Array<string>; cacheTtl: number; prefetch: boolean; verbose: boolean; network: NetworkMode }
+// NetworkMode: 'fetch' | 'cache-only' | 'off'
+```
+
+### `StatusProvider`
+
+```ts
+import type { StatusProvider } from 'todo-watch/oxlint';
+import type { StatusRequest, StatusResult } from 'todo-watch';
+// StatusProvider: (request: StatusRequest) => Record<string, StatusResult>
+// StatusRequest: { refs: Array<RefId>; cwd: string; keywords: Array<string>; cacheTtl: number; prefetch: boolean; cacheOnly?: boolean }
+// StatusResult:
+//   | { ok: true; status: IssueStatus | PullRequestStatus; viewer: string | undefined; fetchedAt: string }
+//   | { ok: false; reason: 'not-found' | 'unavailable'; message: string; fetchedAt: string }
+```
+
+### Parsed comments
+
+```ts
+import type { SeenMarker, Token, TodoComment, TodoEntry, TodoRef } from 'todo-watch';
+// Token: { text: string; start: number; end: number }
+// TodoComment: Token & { keyword: string; entries: Array<TodoEntry> }
+// TodoEntry: Token & { ref: TodoRef | undefined; seen: SeenMarker | undefined; unknown: Array<Token> }
+// TodoRef: Token & { kind: 'url' | 'short'; owner: string; repo: string; number: number }
+// SeenMarker: Token & { value: string; date: Date | undefined }
+```
+
+## License
+
+MIT

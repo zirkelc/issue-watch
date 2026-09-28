@@ -1,0 +1,85 @@
+import { mkdirSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { RuleTester } from 'oxlint/plugins-dev';
+import { describe, expect, test } from 'vitest';
+import { createWorkerProvider } from '../src/plugin/provider.js';
+import { createResolvedRule } from '../src/plugin/rules.js';
+import { emptyCache, resolveCacheFile, writeCache } from '../src/service/cache.js';
+import { issue, ok, pullRequest, setupRuleTester } from './fixtures.js';
+
+setupRuleTester(RuleTester);
+
+const SEEN = 'seen=2026-09-01T00:00Z';
+
+const request = (cwd: string, numbers: Array<number>) => ({
+  refs: numbers.map((number) => ({ owner: 'o', repo: 'r', number })),
+  cwd,
+  keywords: ['TODO'],
+  cacheTtl: 60,
+  prefetch: true,
+  cacheOnly: true,
+});
+
+describe('createWorkerProvider in cache-only mode', () => {
+  test(`should answer from the cache file without a worker`, () => {
+    // Arrange
+    const cwd = mkdtempSync(join(tmpdir(), 'todo-watch-cache-'));
+    mkdirSync(join(cwd, 'node_modules'));
+    const cache = emptyCache();
+    cache.statuses['o/r#1'] = { ...ok(issue()), fetchedAt: '2020-01-01T00:00:00.000Z' };
+    writeCache(resolveCacheFile(cwd), cache);
+    const provider = createWorkerProvider('/does/not/exist.mjs');
+
+    // Act
+    const response = provider(request(cwd, [1, 2]));
+
+    // Assert
+    expect(Object.keys(response)).toEqual(['o/r#1']);
+    expect(response['o/r#1']?.ok).toBe(true);
+  });
+
+  test(`should answer nothing without a cache file`, () => {
+    // Arrange
+    const cwd = mkdtempSync(join(tmpdir(), 'todo-watch-cache-'));
+    const provider = createWorkerProvider('/does/not/exist.mjs');
+
+    // Act
+    const response = provider(request(cwd, [1]));
+
+    // Assert
+    expect(response).toEqual({});
+  });
+});
+
+const throwingProvider = () => {
+  throw new Error('must not be called');
+};
+
+new RuleTester().run('resolved with network off', createResolvedRule(throwingProvider), {
+  valid: [
+    {
+      code: `// TODO(o/r#2 ${SEEN})`,
+      settings: { 'todo-watch': { network: 'off' } },
+    },
+  ],
+  invalid: [],
+});
+
+new RuleTester().run(
+  'resolved in cache-only mode',
+  createResolvedRule((received) => {
+    expect(received.cacheOnly).toBe(true);
+    return { 'o/r#2': ok(pullRequest({ state: 'CLOSED', closedAt: '2026-09-21T00:00:00Z' })) };
+  }),
+  {
+    valid: [],
+    invalid: [
+      {
+        code: `// TODO(o/r#2 ${SEEN})`,
+        settings: { 'todo-watch': { network: 'cache-only', verbose: false } },
+        errors: [{ message: 'o/r#2 "Fix crash on start" was closed without merge on 2026-09-21.' }],
+      },
+    ],
+  },
+);
