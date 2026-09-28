@@ -35,3 +35,16 @@ export const describeRelease = (release: Release | undefined): string => {
  */
 export const fixCommand = (tool: Tool): string =>
   tool === Tools.CLI ? 'run `todo-watch --fix`' : 'run the linter with --fix';
+
+/**
+ * The next step after a fix was merged, depending on its release.
+ */
+export const nextStepForFix = (release: Release | undefined): string => {
+  if (release?.state === ReleaseStates.RELEASED) {
+    return `Next: upgrade to ${release.tag} or later, then remove the comment.`;
+  }
+  if (release?.state === ReleaseStates.UNRELEASED) {
+    return 'Next: keep the comment until a release contains the fix, then upgrade and remove the comment.';
+  }
+  return 'Next: check that the version you use contains the fix, then remove the comment.';
+};

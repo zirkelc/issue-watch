@@ -29,8 +29,6 @@ export const issue = (overrides: Partial<IssueStatus> = {}): IssueStatus => ({
   createdAt: '2026-01-01T00:00:00Z',
   closedAt: undefined,
   duplicateOf: undefined,
-  comments: [],
-  events: [],
   linkedPullRequests: [],
   ...overrides,
 });
@@ -46,12 +44,8 @@ export const pullRequest = (overrides: Partial<PullRequestStatus> = {}): PullReq
   createdAt: '2026-01-01T00:00:00Z',
   closedAt: undefined,
   mergedAt: undefined,
-  isDraft: false,
   mergeCommit: undefined,
   release: undefined,
-  comments: [],
-  reviews: [],
-  events: [],
   ...overrides,
 });
 
@@ -62,7 +56,6 @@ export const linkedPullRequest = (overrides: Partial<LinkedPullRequest> = {}): L
   title: 'Fix the crash',
   url: `https://github.com/o/r/pull/${overrides.number ?? 5}`,
   state: 'OPEN',
-  linkedAt: '2026-01-01T00:00:00Z',
   mergedAt: undefined,
   closedAt: undefined,
   mergeCommit: undefined,
@@ -70,10 +63,9 @@ export const linkedPullRequest = (overrides: Partial<LinkedPullRequest> = {}): L
   ...overrides,
 });
 
-export const ok = (status: IssueStatus | PullRequestStatus, viewer = 'me'): StatusResult => ({
+export const ok = (status: IssueStatus | PullRequestStatus): StatusResult => ({
   ok: true,
   status,
-  viewer,
   fetchedAt: FETCHED_AT,
 });
 

@@ -1,14 +1,12 @@
-import { DEFAULT_ACTIVITY_OPTIONS, evaluateActivity, type ActivityOptions } from './evaluate/activity.js';
 import { evaluateFormat, type FormatOptions } from './evaluate/format.js';
 import { evaluateInvalid, UNAVAILABLE_MESSAGE_ID } from './evaluate/invalid.js';
-import { evaluateResolved, type ResolvedOptions } from './evaluate/resolved.js';
+import { DEFAULT_ISSUE_OPTIONS, evaluateIssue, type IssueOptions } from './evaluate/issue.js';
+import { DEFAULT_PULL_REQUEST_OPTIONS, evaluatePullRequest, type PullRequestOptions } from './evaluate/pull-request.js';
 import { ALL_RULES, RuleNames, Tools, type Finding, type RuleName, type Tool } from './evaluate/types.js';
 import { toRefKey, type RefId, type RefKey } from './github/types.js';
-import { join } from 'node:path';
 import { DEFAULT_KEYWORDS, parseTodos, type TodoEntry } from './parse.js';
 import { listFiles, readSourceFile } from './service/files.js';
 import { createStatusHandler, type StatusRequest, type StatusResponse } from './service/handler.js';
-import { createHistoryLookup, type AddedAtLookup } from './service/history.js';
 import { resolveRepository } from './service/repo.js';
 
 const DEFAULT_CACHE_TTL_MINUTES = 60;
@@ -28,15 +26,12 @@ export type CheckOptions = {
   /** How long a fetched status stays valid, in minutes. `0` always fetches. */
   cacheTtl?: number;
   format?: Partial<FormatOptions>;
-  resolved?: Partial<ResolvedOptions>;
-  activity?: Partial<ActivityOptions>;
+  issue?: Partial<IssueOptions>;
+  pullRequest?: Partial<PullRequestOptions>;
   /** The tool whose commands the next steps name. Defaults to the CLI. */
   tool?: Tool;
-  now?: Date;
   /** Loads statuses from GitHub. Defaults to a handler with cache and token lookup. */
   getStatuses?: (request: StatusRequest) => Promise<StatusResponse>;
-  /** Finds when a reference was added, for its first seen marker. Defaults to git history. */
-  addedAt?: AddedAtLookup;
 };
 
 export type FileReport = {
@@ -53,10 +48,6 @@ export type CheckResult = {
 };
 
 let defaultHandler: ReturnType<typeof createStatusHandler> | undefined;
-let defaultAddedAt: AddedAtLookup | undefined;
-
-/** The 1-based line of an offset. */
-const lineOf = (text: string, offset: number) => text.slice(0, offset).split('\n').length;
 
 /**
  * Checks all TODO references in the given paths, with the same checks as the lint rules. Unlike
@@ -67,14 +58,12 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
   const rules = new Set(options.rules ?? ALL_RULES);
   const keywords = options.keywords ?? DEFAULT_KEYWORDS;
   const tool = options.tool ?? Tools.CLI;
-  const now = options.now ?? new Date();
   const only = options.refs ? new Set(options.refs.map(toRefKey)) : undefined;
   const repository = resolveRepository(cwd, options.repo);
-  const addedAt = options.addedAt ?? (defaultAddedAt ??= createHistoryLookup());
 
   const formatOptions: FormatOptions = { expandShortRefs: false, ...options.format };
-  const resolvedOptions: ResolvedOptions = { waitForRelease: false, ...options.resolved };
-  const activityOptions: ActivityOptions = { ...DEFAULT_ACTIVITY_OPTIONS, ...options.activity };
+  const issueOptions: IssueOptions = { ...DEFAULT_ISSUE_OPTIONS, ...options.issue };
+  const pullRequestOptions: PullRequestOptions = { ...DEFAULT_PULL_REQUEST_OPTIONS, ...options.pullRequest };
 
   const files: Array<{ path: string; text: string; entries: Array<TodoEntry> }> = [];
   for (const path of listFiles(cwd, options.paths)) {
@@ -94,7 +83,7 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
     }
   }
 
-  const needsNetwork = rules.has(RuleNames.INVALID) || rules.has(RuleNames.RESOLVED) || rules.has(RuleNames.ACTIVITY);
+  const needsNetwork = [...rules].some((rule) => rule !== RuleNames.FORMAT);
   let statuses: StatusResponse = {};
   if (needsNetwork && refs.size > 0) {
     const getStatuses = options.getStatuses ?? (defaultHandler ??= createStatusHandler());
@@ -115,21 +104,13 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
     const findings: Array<Finding> = [];
 
     for (const entry of entries) {
-      if (rules.has(RuleNames.FORMAT)) {
-        findings.push(
-          ...evaluateFormat(entry, formatOptions, {
-            now,
-            tool,
-            addedAt: (ref) => addedAt(join(cwd, path), ref.text, lineOf(text, ref.start)),
-          }),
-        );
-      }
+      if (rules.has(RuleNames.FORMAT)) findings.push(...evaluateFormat(entry, formatOptions, tool));
 
-      const { ref, seen } = entry;
+      const { ref } = entry;
       const result = ref ? statuses[toRefKey(ref)] : undefined;
       if (!ref || !result) continue;
 
-      const target = { ref, seen, watch: entry.watch };
+      const target = { ref };
       if (rules.has(RuleNames.INVALID)) {
         for (const finding of evaluateInvalid(target, result, tool)) {
           if (finding.messageId === UNAVAILABLE_MESSAGE_ID) {
@@ -139,8 +120,10 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
           findings.push(finding);
         }
       }
-      if (rules.has(RuleNames.RESOLVED)) findings.push(...evaluateResolved(target, result, resolvedOptions));
-      if (rules.has(RuleNames.ACTIVITY)) findings.push(...evaluateActivity(target, result, activityOptions, tool));
+      if (rules.has(RuleNames.ISSUE)) findings.push(...evaluateIssue(target, result, issueOptions));
+      if (rules.has(RuleNames.PULL_REQUEST)) {
+        findings.push(...evaluatePullRequest(target, result, pullRequestOptions));
+      }
     }
 
     return { path, text, findings };

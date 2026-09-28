@@ -23,19 +23,6 @@ export const parseRefKey = (key: RefKey): RefId => {
 
 export const formatRef = (ref: RefId): string => `${ref.owner}/${ref.repo}#${ref.number}`;
 
-export type Author = {
-  login: string;
-  isBot: boolean;
-};
-
-export type Comment = {
-  url: string;
-  createdAt: string;
-  /** Plain text of the comment, without markdown. */
-  body: string;
-  author: Author | undefined;
-};
-
 export const ReleaseStates = {
   /** A tag that contains the merge commit was found. */
   RELEASED: 'released',
@@ -58,24 +45,6 @@ export type Release =
     }
   | { state: typeof ReleaseStates.UNRELEASED }
   | { state: typeof ReleaseStates.UNKNOWN };
-
-export const EventTypes = {
-  REOPENED: 'reopened',
-  CLOSED: 'closed',
-  READY_FOR_REVIEW: 'ready-for-review',
-  CONVERTED_TO_DRAFT: 'converted-to-draft',
-  LABELED: 'labeled',
-  MILESTONED: 'milestoned',
-} as const;
-
-export type EventType = (typeof EventTypes)[keyof typeof EventTypes];
-
-export type TimelineEvent = {
-  type: EventType;
-  createdAt: string;
-  /** Label name or milestone title. */
-  detail?: string;
-};
 
 export const PullRequestStates = {
   OPEN: 'OPEN',
@@ -101,27 +70,14 @@ export const IssueStateReasons = {
 
 export type IssueStateReason = (typeof IssueStateReasons)[keyof typeof IssueStateReasons];
 
-export const ReviewStates = {
-  APPROVED: 'APPROVED',
-  CHANGES_REQUESTED: 'CHANGES_REQUESTED',
-} as const;
-
-export type Review = {
-  state: string;
-  url: string;
-  createdAt: string;
-  author: Author | undefined;
-};
-
 /**
- * A pull request that closes an issue when it is merged.
+ * A pull request that closes an issue when it is merged: linked with a closing keyword or in the
+ * Development sidebar.
  */
 export type LinkedPullRequest = RefId & {
   title: string;
   url: string;
   state: PullRequestState;
-  /** When the pull request was linked to the issue. */
-  linkedAt: string;
   mergedAt: string | undefined;
   closedAt: string | undefined;
   mergeCommit: string | undefined;
@@ -133,8 +89,6 @@ type StatusBase = RefId & {
   url: string;
   createdAt: string;
   closedAt: string | undefined;
-  comments: Array<Comment>;
-  events: Array<TimelineEvent>;
 };
 
 export const RefTypes = {
@@ -154,10 +108,8 @@ export type PullRequestStatus = StatusBase & {
   type: typeof RefTypes.PULL_REQUEST;
   state: PullRequestState;
   mergedAt: string | undefined;
-  isDraft: boolean;
   mergeCommit: string | undefined;
   release: Release | undefined;
-  reviews: Array<Review>;
 };
 
 export type RefStatus = IssueStatus | PullRequestStatus;
@@ -173,8 +125,6 @@ export type StatusResult =
   | {
       ok: true;
       status: RefStatus;
-      /** Login of the authenticated user, to ignore own comments. */
-      viewer: string | undefined;
       fetchedAt: string;
     }
   | {

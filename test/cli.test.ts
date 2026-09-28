@@ -6,26 +6,20 @@ import { describe, expect, test } from 'vitest';
 import { check } from '../src/check.js';
 import { applyEdits } from '../src/cli/edits.js';
 import { run, type RunDeps } from '../src/cli/run.js';
-import { FETCHED_AT, fakeProvider, issue, ok, pullRequest } from './fixtures.js';
-
-const NOW = new Date('2026-09-28T12:00:00Z');
-const SEEN = 'seen=2026-09-01T00:00Z';
+import { FETCHED_AT, fakeProvider, issue, linkedPullRequest, ok, pullRequest } from './fixtures.js';
 
 const statuses = {
   'o/r#1': ok(
     issue({
-      comments: [
-        {
-          url: 'https://github.com/o/r/issues/1#issuecomment-9',
-          createdAt: '2026-09-10T00:00:00Z',
-          body: 'Fixed in main',
-          author: { login: 'alice', isBot: false },
-        },
+      linkedPullRequests: [
+        linkedPullRequest({ state: 'MERGED', mergedAt: '2026-09-10T00:00:00Z', release: { state: 'unreleased' } }),
       ],
     }),
   ),
   'o/r#2': ok(pullRequest({ state: 'MERGED', mergedAt: '2026-09-20T00:00:00Z', release: { state: 'unreleased' } })),
   'o/r#3': ok(issue({ number: 3 })),
+  'o/r#4': ok(issue({ number: 4, state: 'CLOSED', stateReason: 'NOT_PLANNED', closedAt: '2026-09-04T00:00:00Z' })),
+  'old/name#3': ok(issue({ number: 3 })),
 };
 
 const getStatuses = async (request: Parameters<ReturnType<typeof fakeProvider>>[0]) => fakeProvider(statuses)(request);
@@ -51,7 +45,6 @@ const runCli = async (argv: Array<string>, cwd: string) => {
     stdout: (text) => (stdout += text),
     stderr: (text) => (stderr += text),
     getStatuses,
-    now: NOW,
   };
   const code = await run(argv, deps);
   return { code, stdout, stderr };
@@ -62,11 +55,11 @@ describe('applyEdits', () => {
     // Act
     const result = applyEdits('TODO(o/r#1)', [
       { start: 5, end: 10, text: 'https://github.com/o/r/issues/1' },
-      { start: 10, end: 10, text: ' seen=x' },
+      { start: 10, end: 11, text: ': x)' },
     ]);
 
     // Assert
-    expect(result).toEqual({ text: 'TODO(https://github.com/o/r/issues/1 seen=x)', applied: 2 });
+    expect(result).toEqual({ text: 'TODO(https://github.com/o/r/issues/1: x)', applied: 2 });
   });
 
   test(`should skip overlapping edits`, () => {
@@ -85,35 +78,34 @@ describe('check', () => {
   test(`should check any text file and report per file`, async () => {
     // Arrange
     const cwd = project({
-      'src/a.ts': `// TODO(o/r#2 ${SEEN})\nexport const a = 1;\n`,
-      'docs/notes.md': `Waiting for TODO(o/r#1 ${SEEN}).\n`,
-      'scripts/run.py': `# FIXME(o/r#3)\n`,
-      'node_modules/dep/index.js': `// TODO(o/r#2 ${SEEN})\n`,
+      'src/a.ts': `// TODO(o/r#2)\nexport const a = 1;\n`,
+      'docs/notes.md': `Waiting for TODO(o/r#1).\n`,
+      'scripts/run.py': `# FIXME(o/r#3 please)\n`,
+      'node_modules/dep/index.js': `// TODO(o/r#2)\n`,
     });
 
     // Act
-    const result = await check({ cwd, getStatuses, now: NOW });
+    const result = await check({ cwd, getStatuses });
 
     // Assert
     expect(result.refCount).toBe(3);
     expect(result.files.map((file) => [file.path, file.findings.map((finding) => finding.messageId)])).toEqual([
-      ['docs/notes.md', ['activity']],
-      ['scripts/run.py', ['missingSeen']],
+      ['docs/notes.md', ['linkedMerged']],
+      ['scripts/run.py', ['unexpectedText']],
       ['src/a.ts', ['merged']],
     ]);
   });
 
   test(`should check only the given references and rules`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': `// TODO(o/r#1 ${SEEN})\n// TODO(o/r#2 ${SEEN})\n// TODO(o/r#3)\n` });
+    const cwd = project({ 'a.ts': `// TODO(o/r#1)\n// TODO(o/r#2)\n// TODO(o/r#3)\n` });
 
     // Act
     const result = await check({
       cwd,
       getStatuses,
-      now: NOW,
       refs: [{ owner: 'o', repo: 'r', number: 2 }],
-      rules: ['resolved'],
+      rules: ['pull-request'],
     });
 
     // Assert
@@ -123,7 +115,7 @@ describe('check', () => {
 
   test(`should report unavailable statuses once per run`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': `// TODO(x/y#1 ${SEEN})\n`, 'b.ts': `// TODO(x/y#2 ${SEEN})\n` });
+    const cwd = project({ 'a.ts': `// TODO(x/y#1)\n`, 'b.ts': `// TODO(x/y#2)\n` });
     const failure = {
       ok: false,
       reason: 'unavailable',
@@ -134,7 +126,6 @@ describe('check', () => {
     // Act
     const result = await check({
       cwd,
-      now: NOW,
       getStatuses: async () => ({ 'x/y#1': failure, 'x/y#2': failure }),
     });
 
@@ -147,7 +138,7 @@ describe('check', () => {
 describe('run', () => {
   test(`should print a text report and fail on errors`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': `// TODO(o/r#2 ${SEEN})\n// TODO(o/r#3)\n` });
+    const cwd = project({ 'a.ts': `// TODO(o/r#2)\n// TODO(old/name#3)\n` });
 
     // Act
     const { code, stdout } = await runCli([], cwd);
@@ -156,13 +147,15 @@ describe('run', () => {
     expect(code).toBe(1);
     expect(stdout).toBe(
       [
-        'a.ts:1:9  warning  resolved',
+        'a.ts:1:9  warning  pull-request',
         '  o/r#2 "Fix crash on start" was merged on 2026-09-20, not released yet.',
         '  URL: https://github.com/o/r/pull/2',
-        '  Next: keep the workaround until a release contains the fix. Then upgrade and remove the TODO and its workaround.',
+        '  Next: keep the comment until a release contains the fix, then upgrade and remove the comment.',
         '',
-        'a.ts:2:9  error  format',
-        '  Missing seen marker for "o/r#3". Add " seen=2026-09-28T12:00Z" (the current time) after the reference, or run `todo-watch --fix`.',
+        'a.ts:2:9  error  invalid',
+        '  old/name#3 has moved to o/r#3 "Crash on start".',
+        '  URL: https://github.com/o/r/issues/3',
+        '  Next: run `todo-watch --fix`, or replace "old/name#3" with "o/r#3".',
         '',
         '2 problems (1 error, 1 warning) in 2 references. 1 can be fixed with --fix.',
         '',
@@ -172,7 +165,7 @@ describe('run', () => {
 
   test(`should pass without problems`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': `// TODO(o/r#3 ${SEEN})\n` });
+    const cwd = project({ 'a.ts': `// TODO(o/r#3)\n` });
 
     // Act
     const { code, stdout } = await runCli([], cwd);
@@ -188,7 +181,7 @@ describe('run', () => {
     [['--fail-on', 'error'], 0],
   ])(`should use fail level %j`, async (argv, expected) => {
     // Arrange
-    const cwd = project({ 'a.ts': `// TODO(o/r#2 ${SEEN})\n` });
+    const cwd = project({ 'a.ts': `// TODO(o/r#2)\n` });
 
     // Act
     const { code } = await runCli(argv, cwd);
@@ -199,7 +192,7 @@ describe('run', () => {
 
   test(`should print json`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': `// TODO(o/r#1 ${SEEN})\n` });
+    const cwd = project({ 'a.ts': `// TODO(o/r#1)\n` });
 
     // Act
     const { stdout } = await runCli(['--format', 'json'], cwd);
@@ -213,23 +206,23 @@ describe('run', () => {
       line: 1,
       column: 9,
       severity: 'warn',
-      rule: 'activity',
-      messageId: 'activity',
+      rule: 'issue',
+      messageId: 'linkedMerged',
       ref: 'o/r#1',
-      summary: 'o/r#1 "Crash on start" was updated since 2026-09-01T00:00Z: 1 new comment.',
+      summary:
+        'o/r#1 "Crash on start" is still open, but the linked pull request o/r#5 "Fix the crash" was merged on 2026-09-10, not released yet.',
       details: [
-        'First new comment by alice on 2026-09-10: "Fixed in main"',
-        'URL: https://github.com/o/r/issues/1#issuecomment-9',
-        'Next: read the news and update the code if needed. Then mark it as seen: replace "seen=2026-09-01T00:00Z" with "seen=2026-09-28T10:15Z", or run `todo-watch --mark-seen --ref o/r#1`.',
+        'URL: https://github.com/o/r/pull/5',
+        'Next: keep the comment until a release contains the fix, then upgrade and remove the comment.',
       ],
       fixable: false,
-      suggestions: ['Mark o/r#1 as seen.', 'Stop watching comments on o/r#1.'],
+      suggestions: [],
     });
   });
 
   test(`should print markdown`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': `// TODO(o/r#2 ${SEEN})\n` });
+    const cwd = project({ 'a.ts': `// TODO(o/r#2)\n` });
 
     // Act
     const { stdout } = await runCli(['--format', 'markdown', '--compact'], cwd);
@@ -241,7 +234,7 @@ describe('run', () => {
         '',
         '### `a.ts`',
         '',
-        '- **warning** `resolved` [line 1](a.ts#L1): o/r#2 "Fix crash on start" was merged on 2026-09-20, not released yet.',
+        '- **warning** `pull-request` [line 1](a.ts#L1): o/r#2 "Fix crash on start" was merged on 2026-09-20, not released yet.',
         '',
         '1 problem (0 errors, 1 warning) in 1 reference.',
         '',
@@ -251,21 +244,19 @@ describe('run', () => {
 
   test(`should print only errors with --quiet`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': `// TODO(o/r#2 ${SEEN})\n// TODO(o/r#3)\n` });
+    const cwd = project({ 'a.ts': `// TODO(o/r#2)\n// TODO(old/name#3)\n` });
 
     // Act
     const { stdout } = await runCli(['--quiet', '--compact'], cwd);
 
     // Assert
-    expect(stdout.split('\n')[0]).toBe(
-      'a.ts:2:9  error  format  Missing seen marker for "o/r#3". Add " seen=2026-09-28T12:00Z" (the current time) after the reference, or run `todo-watch --fix`.',
-    );
-    expect(stdout).not.toContain('resolved');
+    expect(stdout.split('\n')[0]).toBe('a.ts:2:9  error  invalid  old/name#3 has moved to o/r#3 "Crash on start".');
+    expect(stdout).not.toContain('pull-request');
   });
 
   test(`should fix files`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': '// TODO(o/r#3)\n// FIXME(o/r#3 seen=2026-09-01T00:00Z)\n' });
+    const cwd = project({ 'a.ts': '// TODO(old/name#3): use the new option\n// FIXME(o/r#3)\n' });
 
     // Act
     const { code, stderr } = await runCli(['--fix', '--expand-short-refs'], cwd);
@@ -274,26 +265,40 @@ describe('run', () => {
     expect(code).toBe(0);
     expect(stderr).toBe('Applied 3 changes.\n');
     expect(readFileSync(join(cwd, 'a.ts'), 'utf8')).toBe(
-      '// TODO(https://github.com/o/r/issues/3 seen=2026-09-28T12:00Z)\n// FIXME(https://github.com/o/r/issues/3 seen=2026-09-01T00:00Z)\n',
+      '// TODO(https://github.com/o/r/issues/3): use the new option\n// FIXME(https://github.com/o/r/issues/3)\n',
     );
   });
 
-  test(`should mark activity as seen for the given reference only`, async () => {
+  test.each([
+    [['--issue-states', 'completed,duplicate'], ''],
+    [['--no-linked-prs'], 'a.ts:2:9'],
+    [[], 'a.ts:1:9'],
+  ])(`should select issue checks with %j`, async (argv, expected) => {
     // Arrange
-    const cwd = project({ 'a.ts': `// TODO(o/r#1 ${SEEN})\n`, 'b.md': `TODO(o/r#1 ${SEEN})\n` });
+    const cwd = project({ 'a.ts': '// TODO(o/r#1)\n// TODO(o/r#4)\n' });
 
     // Act
-    const { code } = await runCli(['--mark-seen', '--ref', 'o/r#1', 'a.ts'], cwd);
+    const { stdout } = await runCli([...argv, '--compact'], cwd);
 
     // Assert
-    expect(code).toBe(0);
-    expect(readFileSync(join(cwd, 'a.ts'), 'utf8')).toBe('// TODO(o/r#1 seen=2026-09-28T10:15Z)\n');
-    expect(readFileSync(join(cwd, 'b.md'), 'utf8')).toBe(`TODO(o/r#1 ${SEEN})\n`);
+    expect(stdout.split('\n')[0]?.startsWith(expected)).toBe(true);
+  });
+
+  test(`should select pull request states`, async () => {
+    // Arrange
+    const cwd = project({ 'a.ts': '// TODO(o/r#2)\n' });
+
+    // Act
+    const { stdout } = await runCli(['--pr-states', 'closed'], cwd);
+
+    // Assert
+    expect(stdout).toBe('No problems found in 1 reference.\n');
   });
 
   test.each([
     [['--format', 'xml'], 'Invalid value "xml" for --format. Use one of: text, json, markdown.'],
-    [['--rules', 'format,foo'], 'Invalid value "foo" for --rules. Use one of: format, invalid, resolved, activity.'],
+    [['--rules', 'format,foo'], 'Invalid value "foo" for --rules. Use one of: format, invalid, issue, pull-request.'],
+    [['--pr-states', 'open'], 'Invalid value "open" for --pr-states. Use one of: merged, closed.'],
     [['--ref', 'o/r'], 'Invalid reference "o/r". Use owner/repo#123 or a GitHub URL.'],
     [['--cache-ttl', 'abc'], 'Invalid value "abc" for --cache-ttl. Use a number of minutes.'],
   ])(`should reject %j`, async (argv, message) => {
@@ -339,95 +344,31 @@ describe('check in a git repository', () => {
   test(`should skip node_modules without a .gitignore`, async () => {
     // Arrange
     const cwd = project({
-      'a.ts': `// TODO(o/r#3 ${SEEN})\n`,
+      'a.ts': `// TODO(o/r#3)\n`,
       'node_modules/dep/index.js': `// TODO(o/r#3)\n`,
       'packages/app/node_modules/dep/index.js': `// TODO(o/r#3)\n`,
     });
     execFileSync('git', ['init', '-q'], { cwd });
 
     // Act
-    const result = await check({ cwd, getStatuses, now: NOW });
+    const result = await check({ cwd, getStatuses });
 
     // Assert
     expect(result.files.map((file) => file.path)).toEqual(['a.ts']);
   });
 });
 
-describe('run with local references and watch markers', () => {
+describe('run with local references', () => {
   test(`should resolve #123 with --repo`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': `// TODO(#2 ${SEEN})\n` });
+    const cwd = project({ 'a.ts': `// TODO(#2)\n` });
 
     // Act
     const { stdout } = await runCli(['--repo', 'o/r', '--compact'], cwd);
 
     // Assert
     expect(stdout.split('\n')[0]).toBe(
-      'a.ts:1:9  warning  resolved  o/r#2 "Fix crash on start" was merged on 2026-09-20, not released yet.',
+      'a.ts:1:9  warning  pull-request  o/r#2 "Fix crash on start" was merged on 2026-09-20, not released yet.',
     );
-  });
-
-  test(`should stop watching categories with --unwatch`, async () => {
-    // Arrange
-    const cwd = project({ 'a.ts': `// TODO(o/r#1 ${SEEN})\n` });
-
-    // Act
-    const { code, stderr } = await runCli(['--unwatch', 'comments,labels'], cwd);
-
-    // Assert
-    expect(code).toBe(0);
-    expect(stderr).toBe('Applied 1 change.\n');
-    expect(readFileSync(join(cwd, 'a.ts'), 'utf8')).toBe(`// TODO(o/r#1 ${SEEN} watch=state,links)\n`);
-  });
-
-  test(`should use --watch as default for all references`, async () => {
-    // Arrange
-    const cwd = project({ 'a.ts': `// TODO(o/r#1 ${SEEN})\n// TODO(o/r#1 ${SEEN} watch=comments)\n` });
-
-    // Act
-    const { stdout } = await runCli(['--watch', 'state', '--compact'], cwd);
-
-    // Assert
-    expect(stdout).toContain('a.ts:2:9  warning  activity');
-    expect(stdout).not.toContain('a.ts:1:9');
-  });
-
-  test(`should reject invalid watch lists`, async () => {
-    // Arrange
-    const cwd = project({});
-
-    // Act
-    const { code, stderr } = await runCli(['--watch-prs', 'reviews,foo'], cwd);
-
-    // Assert
-    expect(code).toBe(2);
-    expect(stderr).toContain('Invalid value "reviews,foo" for --watch-prs.');
-  });
-
-  test(`should add the seen marker from the commit that added the reference`, async () => {
-    // Arrange
-    const cwd = project({ 'a.ts': '// TODO(o/r#3): workaround\n' });
-    const git = (args: Array<string>) =>
-      execFileSync('git', args, {
-        cwd,
-        env: {
-          ...process.env,
-          GIT_AUTHOR_NAME: 'Test',
-          GIT_AUTHOR_EMAIL: 'test@example.com',
-          GIT_COMMITTER_NAME: 'Test',
-          GIT_COMMITTER_EMAIL: 'test@example.com',
-          GIT_AUTHOR_DATE: '2025-04-05T06:07:08Z',
-          GIT_COMMITTER_DATE: '2025-04-05T06:07:08Z',
-        },
-      });
-    git(['init', '-q']);
-    git(['add', '.']);
-    git(['commit', '-q', '-m', 'add todo']);
-
-    // Act
-    await runCli(['--fix', '--rules', 'format'], cwd);
-
-    // Assert
-    expect(readFileSync(join(cwd, 'a.ts'), 'utf8')).toBe('// TODO(o/r#3 seen=2025-04-05T06:07Z): workaround\n');
   });
 });

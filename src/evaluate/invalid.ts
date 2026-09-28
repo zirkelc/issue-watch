@@ -41,7 +41,7 @@ export const evaluateInvalid = (target: RefTarget, result: StatusResult, tool: T
           messageId: 'notFound',
           summary: `${ref.text} was not found, or the GitHub token has no access to it.`,
           details: [
-            'Next: check the reference for typos. If the issue was deleted, remove the TODO. If the repo is private, check that the GitHub token can read it.',
+            'Next: check the reference for typos. If the issue was deleted, remove the comment. If the repo is private, check that the GitHub token can read it.',
           ],
         },
       ];

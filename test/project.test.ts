@@ -3,8 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
-import { formatShortRef, parseTodos, parseWatch } from '../src/parse.js';
-import { createHistoryLookup } from '../src/service/history.js';
+import { formatShortRef, parseTodos } from '../src/parse.js';
 import { detectRepository, parseRepository } from '../src/service/repo.js';
 
 const REPOSITORY = { owner: 'vitest-dev', repo: 'vitest' };
@@ -31,7 +30,7 @@ const gitRepo = () => {
 describe('parseTodos with local references', () => {
   test(`should resolve #123 against the repository`, () => {
     // Act
-    const [todo] = parseTodos('TODO(#123 seen=2026-09-28T10:03Z)', ['TODO'], REPOSITORY);
+    const [todo] = parseTodos('TODO(#123)', ['TODO'], REPOSITORY);
 
     // Assert
     expect(todo?.entries[0]?.ref).toMatchObject({ kind: 'local', owner: 'vitest-dev', repo: 'vitest', number: 123 });
@@ -49,27 +48,11 @@ describe('parseTodos with local references', () => {
 
   test(`should split entries only before references`, () => {
     // Act
-    const [todo] = parseTodos('TODO(o/r#1 watch=comments,links, #2,o/r#3)', ['TODO'], REPOSITORY);
+    const [todo] = parseTodos('TODO(https://github.com/o/r/issues/1?a=b,c, #2,o/r#3)', ['TODO'], REPOSITORY);
 
     // Assert
     expect(todo?.entries.map((entry) => entry.ref?.number)).toEqual([1, 2, 3]);
-    expect(todo?.entries[0]?.watch?.categories).toEqual(['comments', 'links']);
-  });
-});
-
-describe('parseWatch', () => {
-  test.each([
-    ['comments', ['comments']],
-    ['links,comments,links', ['links', 'comments']],
-    ['none', []],
-    ['comments,', undefined],
-    ['comment', undefined],
-  ])(`should parse %s`, (value, expected) => {
-    // Act
-    const categories = parseWatch(value);
-
-    // Assert
-    expect(categories).toEqual(expected);
+    expect(todo?.entries[0]?.ref?.text).toBe('https://github.com/o/r/issues/1?a=b,c');
   });
 });
 
@@ -135,57 +118,5 @@ describe('detectRepository', () => {
 
     // Assert
     expect(repository).toEqual({ owner: 'o', repo: 'r' });
-  });
-});
-
-describe('createHistoryLookup', () => {
-  test(`should find the commit that added the reference, not the last change of the line`, () => {
-    // Arrange
-    const { cwd, git } = gitRepo();
-    const file = join(cwd, 'a.ts');
-    writeFileSync(file, 'export const a = 1;\n');
-    git(['add', '.']);
-    git(['commit', '-q', '-m', 'init'], '2024-01-01T00:00:00Z');
-    writeFileSync(file, '// TODO(o/r#1): workaround\nexport const a = 1;\n');
-    git(['commit', '-q', '-am', 'add todo'], '2025-03-04T05:06:00Z');
-    writeFileSync(file, '// TODO(o/r#1): workaround for the crash\nexport const a = 1;\n');
-    git(['commit', '-q', '-am', 'edit todo'], '2026-01-01T00:00:00Z');
-    const lookup = createHistoryLookup();
-
-    // Act
-    const addedAt = lookup(file, 'o/r#1', 1);
-
-    // Assert
-    expect(addedAt?.toISOString()).toBe('2025-03-04T05:06:00.000Z');
-  });
-
-  test(`should use blame if the reference text changed`, () => {
-    // Arrange
-    const { cwd, git } = gitRepo();
-    const file = join(cwd, 'a.ts');
-    writeFileSync(file, '// TODO(https://github.com/o/r/issues/1)\n');
-    git(['add', '.']);
-    git(['commit', '-q', '-m', 'add'], '2025-06-07T08:09:00Z');
-    const lookup = createHistoryLookup();
-
-    // Act
-    const addedAt = lookup(file, 'o/r#1', 1);
-
-    // Assert
-    expect(addedAt?.toISOString()).toBe('2025-06-07T08:09:00.000Z');
-  });
-
-  test(`should return nothing for code that is not committed`, () => {
-    // Arrange
-    const { cwd } = gitRepo();
-    const file = join(cwd, 'a.ts');
-    writeFileSync(file, '// TODO(o/r#1)\n');
-    const lookup = createHistoryLookup();
-
-    // Act
-    const addedAt = lookup(file, 'o/r#1', 1);
-
-    // Assert
-    expect(addedAt).toBe(undefined);
   });
 });

@@ -1,10 +1,10 @@
-import type { SeenMarker, Token, TodoRef, WatchCategory, WatchMarker } from '../parse.js';
+import type { Token, TodoRef } from '../parse.js';
 
 export const RuleNames = {
   FORMAT: 'format',
   INVALID: 'invalid',
-  RESOLVED: 'resolved',
-  ACTIVITY: 'activity',
+  ISSUE: 'issue',
+  PULL_REQUEST: 'pull-request',
 } as const;
 
 export type RuleName = (typeof RuleNames)[keyof typeof RuleNames];
@@ -24,8 +24,8 @@ export type Severity = (typeof Severities)[keyof typeof Severities];
 export const DEFAULT_SEVERITIES: Record<RuleName, Severity> = {
   format: Severities.ERROR,
   invalid: Severities.ERROR,
-  resolved: Severities.WARN,
-  activity: Severities.WARN,
+  issue: Severities.WARN,
+  'pull-request': Severities.WARN,
 };
 
 /**
@@ -60,7 +60,7 @@ export type Finding = {
   ref: TodoRef | undefined;
   /** A safe change that `--fix` applies. */
   fix?: Edit;
-  /** Changes that need a decision, like marking activity as seen. */
+  /** Changes that need a decision, like replacing a duplicate issue with the original. */
   suggestions?: Array<Suggestion>;
 };
 
@@ -68,17 +68,13 @@ export type Suggestion = {
   messageId: string;
   description: string;
   edit: Edit;
-  /** The activity category that the suggestion stops watching. */
-  category?: WatchCategory;
 };
 
 /**
- * A reference with its optional seen marker, as parsed from one TODO entry.
+ * A reference as parsed from one TODO entry.
  */
 export type RefTarget = {
   ref: TodoRef;
-  seen: SeenMarker | undefined;
-  watch?: WatchMarker | undefined;
 };
 
 const DETAIL_SEPARATOR = '\n  ';

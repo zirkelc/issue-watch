@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatSeen, parseRef, parseSeen, parseTodos, toRefUrl } from '../src/parse.js';
+import { parseRef, parseTodos, toRefUrl } from '../src/parse.js';
 
 const token = (text: string) => ({ text, start: 0, end: text.length });
 
@@ -51,37 +51,6 @@ describe('parseRef', () => {
   });
 });
 
-describe('parseSeen', () => {
-  test(`should parse valid value`, () => {
-    // Act
-    const date = parseSeen('2026-09-28T08:51Z');
-
-    // Assert
-    expect(date?.toISOString()).toBe('2026-09-28T08:51:00.000Z');
-  });
-
-  test.each(['2026-09-28', '2026-09-28T08:51', '2026-09-28T08:51:00Z', '2026-02-30T10:00Z', '2026-09-28T25:00Z'])(
-    `should reject %s`,
-    (value) => {
-      // Act
-      const date = parseSeen(value);
-
-      // Assert
-      expect(date).toBe(undefined);
-    },
-  );
-});
-
-describe('formatSeen', () => {
-  test(`should format with minute precision`, () => {
-    // Act
-    const value = formatSeen(new Date('2026-09-28T08:51:59.999Z'));
-
-    // Assert
-    expect(value).toBe('2026-09-28T08:51Z');
-  });
-});
-
 describe('toRefUrl', () => {
   test(`should build issue url`, () => {
     // Act
@@ -93,9 +62,9 @@ describe('toRefUrl', () => {
 });
 
 describe('parseTodos', () => {
-  test(`should parse ref and seen marker with offsets`, () => {
+  test(`should parse ref with offsets`, () => {
     // Arrange
-    const text = ' TODO(o/r#1 seen=2026-09-28T08:51Z): remove workaround';
+    const text = ' TODO(o/r#1): use the new option';
 
     // Act
     const todos = parseTodos(text);
@@ -104,14 +73,12 @@ describe('parseTodos', () => {
     expect(todos.length).toBe(1);
     const [entry] = todos[0]!.entries;
     expect(text.slice(entry!.ref!.start, entry!.ref!.end)).toBe('o/r#1');
-    expect(text.slice(entry!.seen!.start, entry!.seen!.end)).toBe('seen=2026-09-28T08:51Z');
-    expect(entry!.seen!.value).toBe('2026-09-28T08:51Z');
     expect(entry!.unknown).toEqual([]);
   });
 
   test(`should parse multiple entries`, () => {
     // Arrange
-    const text = 'FIXME(o/r#1 seen=2026-09-28T08:51Z,  https://github.com/o/r/pull/2 )';
+    const text = 'FIXME(o/r#1,  https://github.com/o/r/pull/2 )';
 
     // Act
     const todos = parseTodos(text);

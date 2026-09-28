@@ -28,8 +28,8 @@ export type TodoWatchSettings = {
   /** Scan the repository once and fetch all references in one request. */
   prefetch: boolean;
   /**
-   * Add the URL, the first new comment and the next step to each message, so that a person or an
-   * agent can act without opening GitHub first.
+   * Add the URL and the next step to each message, so that a person or an agent can act without
+   * opening GitHub first.
    */
   verbose: boolean;
   /** How the network rules get the status of references. */

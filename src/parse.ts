@@ -33,51 +33,11 @@ export type TodoRef = Token & {
 };
 
 /**
- * The `seen=YYYY-MM-DDTHH:MMZ` marker that records when the reference was last reviewed.
- * `date` is `undefined` if the value is malformed or not a real date.
- */
-export type SeenMarker = Token & {
-  value: string;
-  date: Date | undefined;
-};
-
-export const WatchCategories = {
-  COMMENTS: 'comments',
-  STATE: 'state',
-  LINKS: 'links',
-  REVIEWS: 'reviews',
-  LABELS: 'labels',
-  MILESTONES: 'milestones',
-} as const;
-
-export type WatchCategory = (typeof WatchCategories)[keyof typeof WatchCategories];
-
-export const WATCH_CATEGORIES: Array<WatchCategory> = Object.values(WatchCategories);
-
-/**
- * The value of `watch=` that watches no activity at all.
- */
-export const WATCH_NONE = 'none';
-
-/**
- * The `watch=comments,links` marker that selects the kinds of activity to report for a reference.
- * `categories` is `undefined` if the value contains an unknown category.
- */
-export type WatchMarker = Token & {
-  value: string;
-  categories: Array<WatchCategory> | undefined;
-};
-
-/**
  * One comma-separated entry inside the parentheses of a TODO.
  */
 export type TodoEntry = Token & {
   /** The first token that parses as a GitHub reference. */
   ref: TodoRef | undefined;
-  /** The first token that starts with `seen=`. */
-  seen: SeenMarker | undefined;
-  /** The first token that starts with `watch=`. */
-  watch: WatchMarker | undefined;
   /** A `#123` reference that cannot be resolved, because the repository of the project is unknown. */
   unresolved: Token | undefined;
   /** All remaining tokens. */
@@ -100,15 +60,12 @@ export type TodoComment = Token & {
 const URL_REF_RE = /^https?:\/\/(?:www\.)?github\.com\/([\w.-]+)\/([\w.-]+)\/(?:issues|pull)\/(\d+)(?:[/?#]\S*)?$/;
 const SHORT_REF_RE = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
 const LOCAL_REF_RE = /^#(\d+)$/;
-const SEEN_PREFIX = 'seen=';
-const WATCH_PREFIX = 'watch=';
 
 /**
- * A comma separates two entries only if a reference follows it. A comma inside a token, like in
- * `watch=comments,links`, does not.
+ * A comma separates two entries only if a reference follows it. A comma inside other text, like
+ * a URL query, does not.
  */
 const ENTRY_SEPARATOR_RE = /,(?=\s*(?:https?:\/\/|[\w.-]+\/[\w.-]+#\d|#\d))/g;
-const SEEN_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/;
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -142,43 +99,6 @@ export const parseRef = (token: Token, repository?: Repository): TodoRef | undef
 };
 
 /**
- * Parses the value of a watch marker, e.g. `comments,links` or `none`.
- */
-export const parseWatch = (value: string): Array<WatchCategory> | undefined => {
-  if (value === WATCH_NONE) return [];
-
-  const categories = value.split(',');
-  const known = new Set<string>(WATCH_CATEGORIES);
-  if (categories.some((category) => !known.has(category))) return undefined;
-
-  return [...new Set(categories as Array<WatchCategory>)];
-};
-
-/**
- * Formats a watch marker value. An empty list watches nothing.
- */
-export const formatWatch = (categories: Array<WatchCategory>): string =>
-  categories.length === 0 ? WATCH_NONE : categories.join(',');
-
-/**
- * Formats a date as seen marker value with minute precision, e.g. `2026-09-28T08:51Z`.
- */
-export const formatSeen = (date: Date): string => `${date.toISOString().slice(0, 16)}Z`;
-
-/**
- * Parses the value of a seen marker. Rejects values that match the format but are no real date,
- * e.g. `2026-02-30T10:00Z`.
- */
-export const parseSeen = (value: string): Date | undefined => {
-  if (!SEEN_RE.test(value)) return undefined;
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime()) || formatSeen(date) !== value) return undefined;
-
-  return date;
-};
-
-/**
  * Formats a reference in the short form that fits the project: `#123` in the repository of the
  * project, else `owner/repo#123`.
  */
@@ -205,24 +125,10 @@ const tokenize = (text: string, offset: number): Array<Token> =>
 
 const parseEntry = (text: string, offset: number, repository: Repository | undefined): TodoEntry => {
   let ref: TodoRef | undefined;
-  let seen: SeenMarker | undefined;
-  let watch: WatchMarker | undefined;
   let unresolved: Token | undefined;
   const unknown: Array<Token> = [];
 
   for (const token of tokenize(text, offset)) {
-    if (!seen && token.text.startsWith(SEEN_PREFIX)) {
-      const value = token.text.slice(SEEN_PREFIX.length);
-      seen = { ...token, value, date: parseSeen(value) };
-      continue;
-    }
-
-    if (!watch && token.text.startsWith(WATCH_PREFIX)) {
-      const value = token.text.slice(WATCH_PREFIX.length);
-      watch = { ...token, value, categories: parseWatch(value) };
-      continue;
-    }
-
     const parsed = ref || unresolved ? undefined : parseRef(token, repository);
     if (parsed) {
       ref = parsed;
@@ -240,7 +146,7 @@ const parseEntry = (text: string, offset: number, repository: Repository | undef
   const trimmed = text.trim();
   const start = offset + text.indexOf(trimmed);
 
-  return { text: trimmed, start, end: start + trimmed.length, ref, seen, watch, unresolved, unknown };
+  return { text: trimmed, start, end: start + trimmed.length, ref, unresolved, unknown };
 };
 
 /**

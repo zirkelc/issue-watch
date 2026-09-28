@@ -1,7 +1,7 @@
 import { definePlugin, type Plugin } from '@oxlint/plugins';
 import { DEFAULT_SEVERITIES, RuleNames } from '../evaluate/types.js';
 import { createWorkerProvider, type StatusProvider } from './provider.js';
-import { createActivityRule, createInvalidRule, createResolvedRule, formatRule } from './rules.js';
+import { createInvalidRule, createIssueRule, createPullRequestRule, formatRule } from './rules.js';
 import { PLUGIN_NAME } from './settings.js';
 
 /**
@@ -10,8 +10,8 @@ import { PLUGIN_NAME } from './settings.js';
 export const recommendedRules = {
   [`${PLUGIN_NAME}/${RuleNames.FORMAT}`]: DEFAULT_SEVERITIES.format,
   [`${PLUGIN_NAME}/${RuleNames.INVALID}`]: DEFAULT_SEVERITIES.invalid,
-  [`${PLUGIN_NAME}/${RuleNames.RESOLVED}`]: DEFAULT_SEVERITIES.resolved,
-  [`${PLUGIN_NAME}/${RuleNames.ACTIVITY}`]: DEFAULT_SEVERITIES.activity,
+  [`${PLUGIN_NAME}/${RuleNames.ISSUE}`]: DEFAULT_SEVERITIES.issue,
+  [`${PLUGIN_NAME}/${RuleNames.PULL_REQUEST}`]: DEFAULT_SEVERITIES['pull-request'],
 } as const;
 
 export type TodoWatchPlugin = Plugin & {
@@ -29,8 +29,8 @@ export const createPlugin = (provider: StatusProvider): TodoWatchPlugin => {
     rules: {
       [RuleNames.FORMAT]: formatRule,
       [RuleNames.INVALID]: createInvalidRule(provider),
-      [RuleNames.RESOLVED]: createResolvedRule(provider),
-      [RuleNames.ACTIVITY]: createActivityRule(provider),
+      [RuleNames.ISSUE]: createIssueRule(provider),
+      [RuleNames.PULL_REQUEST]: createPullRequestRule(provider),
     },
   });
 

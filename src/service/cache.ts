@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import type { CachedRelease } from '../github/fetch-statuses.js';
 import type { RefKey, StatusResult } from '../github/types.js';
 
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 
 export type CacheData = {
   version: typeof CACHE_VERSION;

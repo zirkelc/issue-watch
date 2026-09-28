@@ -1,17 +1,14 @@
 import { defineRule, type Context, type Rule } from '@oxlint/plugins';
-import {
-  DEFAULT_ACTIVITY_OPTIONS,
-  evaluateActivity,
-  MARK_SEEN_MESSAGE_ID,
-  UNWATCH_MESSAGE_ID,
-  type ActivityOptions,
-} from '../evaluate/activity.js';
 import { evaluateFormat, type FormatOptions } from '../evaluate/format.js';
 import { evaluateInvalid, UNAVAILABLE_MESSAGE_ID, type InvalidOptions } from '../evaluate/invalid.js';
-import { evaluateResolved, type ResolvedOptions } from '../evaluate/resolved.js';
+import { DEFAULT_ISSUE_OPTIONS, evaluateIssue, REPORTED_ISSUE_STATES, type IssueOptions } from '../evaluate/issue.js';
+import {
+  DEFAULT_PULL_REQUEST_OPTIONS,
+  evaluatePullRequest,
+  REPORTED_PULL_REQUEST_STATES,
+  type PullRequestOptions,
+} from '../evaluate/pull-request.js';
 import { formatMessage, Tools, type Finding } from '../evaluate/types.js';
-import { WATCH_CATEGORIES } from '../parse.js';
-import { createHistoryLookup } from '../service/history.js';
 import type { StatusProvider } from './provider.js';
 import { getSettings, projectRepository } from './settings.js';
 import { visitRefStatuses } from './status.js';
@@ -48,27 +45,12 @@ const optionsOf = <OPTIONS extends object>(context: Context, defaults: OPTIONS):
   ...(context.options[0] as Partial<OPTIONS> | undefined),
 });
 
-/**
- * Git history is read only for references without a seen marker, and each result is kept for the
- * lifetime of the process.
- */
-const addedAt = createHistoryLookup();
-
 export const formatRule = defineRule({
   meta: {
     type: 'problem',
     fixable: 'code',
-    docs: { description: 'Enforce a valid GitHub reference and seen marker in TODO comments.' },
-    messages: messagesFor([
-      'invalidRef',
-      'missingRepo',
-      'unexpectedText',
-      'missingSeen',
-      'invalidSeen',
-      'futureSeen',
-      'invalidWatch',
-      'shortRef',
-    ]),
+    docs: { description: 'Enforce valid GitHub references in TODO comments.' },
+    messages: messagesFor(['invalidRef', 'missingRepo', 'unexpectedText', 'shortRef']),
     schema: [
       {
         type: 'object',
@@ -84,17 +66,12 @@ export const formatRule = defineRule({
 
     return {
       Program() {
-        const now = new Date();
         const found = findEntries(context, settings.keywords, projectRepository(context.cwd, settings));
 
         for (const entryInFile of found) {
-          const { locOf } = entryInFile;
-          const findings = evaluateFormat(entryInFile.entry, options, {
-            now,
-            tool: Tools.LINT,
-            addedAt: (ref) => addedAt(context.physicalFilename, ref.text, locOf(ref).start.line),
-          });
-          for (const finding of findings) report(context, entryInFile, finding);
+          for (const finding of evaluateFormat(entryInFile.entry, options, Tools.LINT)) {
+            report(context, entryInFile, finding);
+          }
         }
       },
     };
@@ -139,82 +116,68 @@ export const createInvalidRule = (provider: StatusProvider): Rule =>
     },
   });
 
-export const createResolvedRule = (provider: StatusProvider): Rule =>
+const statesSchema = (states: Array<string>) => ({ type: 'array', items: { type: 'string', enum: states } }) as const;
+
+export const createIssueRule = (provider: StatusProvider): Rule =>
   defineRule({
     meta: {
       type: 'suggestion',
       hasSuggestions: true,
       docs: {
-        description:
-          'Report TODO references to GitHub issues that are closed or pull requests that are merged or closed.',
+        description: 'Report TODO references to GitHub issues that are closed, or open with a merged pull request.',
       },
-      messages: messagesFor([
-        'completed',
-        'notPlanned',
-        'duplicate',
-        'merged',
-        'closedUnmerged',
-        'replaceWithDuplicate',
-      ]),
+      messages: messagesFor(['completed', 'notPlanned', 'duplicate', 'linkedMerged', 'replaceWithDuplicate']),
       schema: [
         {
           type: 'object',
-          properties: { waitForRelease: { type: 'boolean' } },
+          properties: {
+            states: statesSchema(REPORTED_ISSUE_STATES),
+            linkedPullRequests: { type: 'boolean' },
+            waitForRelease: { type: 'boolean' },
+          },
           additionalProperties: false,
         },
       ],
-      defaultOptions: [{ waitForRelease: false }],
+      defaultOptions: [DEFAULT_ISSUE_OPTIONS],
     },
     create(context) {
-      const options = optionsOf<ResolvedOptions>(context, { waitForRelease: false });
+      const options = optionsOf<IssueOptions>(context, DEFAULT_ISSUE_OPTIONS);
 
       return {
         Program() {
           visitRefStatuses(context, provider, (found, result) => {
-            for (const finding of evaluateResolved(found, result, options)) report(context, found, finding);
+            for (const finding of evaluateIssue(found, result, options)) report(context, found, finding);
           });
         },
       };
     },
   });
 
-const WATCH_SCHEMA = {
-  type: 'object',
-  properties: { watch: { type: 'array', items: { type: 'string', enum: WATCH_CATEGORIES } } },
-  additionalProperties: false,
-} as const;
-
-export const createActivityRule = (provider: StatusProvider): Rule =>
+export const createPullRequestRule = (provider: StatusProvider): Rule =>
   defineRule({
     meta: {
       type: 'suggestion',
-      hasSuggestions: true,
-      docs: {
-        description: 'Report new activity on open GitHub issues and pull requests since the seen marker of a TODO.',
-      },
-      messages: messagesFor(['activity', MARK_SEEN_MESSAGE_ID, UNWATCH_MESSAGE_ID]),
+      docs: { description: 'Report TODO references to GitHub pull requests that are merged or closed.' },
+      messages: messagesFor(['merged', 'closedUnmerged']),
       schema: [
         {
           type: 'object',
           properties: {
-            ignoreAuthors: { type: 'array', items: { type: 'string' } },
-            issues: WATCH_SCHEMA,
-            pullRequests: WATCH_SCHEMA,
+            states: statesSchema(REPORTED_PULL_REQUEST_STATES),
+            waitForRelease: { type: 'boolean' },
           },
           additionalProperties: false,
         },
       ],
-      defaultOptions: [DEFAULT_ACTIVITY_OPTIONS],
+      defaultOptions: [DEFAULT_PULL_REQUEST_OPTIONS],
     },
     create(context) {
-      const options = optionsOf<ActivityOptions>(context, DEFAULT_ACTIVITY_OPTIONS);
+      const options = optionsOf<PullRequestOptions>(context, DEFAULT_PULL_REQUEST_OPTIONS);
 
       return {
         Program() {
           visitRefStatuses(context, provider, (found, result) => {
-            for (const finding of evaluateActivity(found, result, options, Tools.LINT)) {
-              report(context, found, finding);
-            }
+            for (const finding of evaluatePullRequest(found, result, options)) report(context, found, finding);
           });
         },
       };

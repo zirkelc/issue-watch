@@ -69,7 +69,6 @@ const findTransferred = async (client: GithubClient, ref: RefId): Promise<RefId 
 };
 
 type BatchResult = {
-  viewer: string | undefined;
   statuses: Map<RefKey, RefStatus>;
   failures: Map<RefKey, StatusResult>;
 };
@@ -83,20 +82,19 @@ const fetchBatch = async (client: GithubClient, refs: Array<RefId>, fetchedAt: s
     response = await client.graphql<RawStatusData>(buildStatusQuery(refs));
   } catch (error) {
     for (const ref of refs) failures.set(toRefKey(ref), unavailable(errorMessage(error), fetchedAt));
-    return { viewer: undefined, statuses, failures };
+    return { statuses, failures };
   }
 
   const data = response.data;
   if (!data) {
     const message = response.errors?.map((error) => error.message).join('; ') || 'Empty response from GitHub.';
     for (const ref of refs) failures.set(toRefKey(ref), unavailable(message, fetchedAt));
-    return { viewer: undefined, statuses, failures };
+    return { statuses, failures };
   }
 
   refs.forEach((ref, index) => {
     const key = toRefKey(ref);
-    const entry = data[aliasOf(index)] as { issueOrPullRequest: Parameters<typeof normalizeStatus>[0] | null } | null;
-    const raw = entry?.issueOrPullRequest;
+    const raw = data[aliasOf(index)]?.issueOrPullRequest;
 
     if (raw) {
       statuses.set(key, normalizeStatus(raw));
@@ -110,7 +108,7 @@ const fetchBatch = async (client: GithubClient, refs: Array<RefId>, fetchedAt: s
     );
   });
 
-  return { viewer: data.viewer?.login, statuses, failures };
+  return { statuses, failures };
 };
 
 type ReleaseLookup = {
@@ -198,7 +196,6 @@ export const fetchStatuses = async (
   const unique = [...new Map(refs.map((ref) => [toRefKey(ref), ref])).values()];
   const batches = await Promise.all(chunk(unique, BATCH_SIZE).map((batch) => fetchBatch(client, batch, fetchedAt)));
 
-  const viewer = batches.find((batch) => batch.viewer)?.viewer;
   const statuses = new Map(batches.flatMap((batch) => [...batch.statuses]));
   const failures = new Map(batches.flatMap((batch) => [...batch.failures]));
 
@@ -231,7 +228,7 @@ export const fetchStatuses = async (
 
   for (const [key, status] of [...released, ...moved]) {
     failures.delete(key);
-    results.set(key, { ok: true, status, viewer, fetchedAt });
+    results.set(key, { ok: true, status, fetchedAt });
   }
   for (const [key, failure] of failures) results.set(key, failure);
 

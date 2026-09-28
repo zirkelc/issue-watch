@@ -4,8 +4,6 @@ import { FETCHED_AT, fakeProvider, issue, ok, setupRuleTester } from './fixtures
 
 setupRuleTester(RuleTester);
 
-const SEEN = 'seen=2026-09-01T00:00Z';
-
 /** Joins the first line of a message with its indented detail lines. */
 const lines = (...parts: Array<string>) => parts.join('\n  ');
 
@@ -29,21 +27,21 @@ const tester = new RuleTester();
 
 tester.run('invalid', createInvalidRule(provider), {
   valid: [
-    `// TODO(o/r#1 ${SEEN})`,
-    `// TODO(https://github.com/O/R/issues/1 ${SEEN})`,
+    `// TODO(o/r#1)`,
+    `// TODO(https://github.com/O/R/issues/1)`,
     {
-      code: `// TODO(x/y#1 ${SEEN})`,
+      code: `// TODO(x/y#1)`,
       options: [{ reportUnavailable: false }],
     },
   ],
   invalid: [
     {
-      code: `// TODO(o/r#404 ${SEEN})`,
+      code: `// TODO(o/r#404)`,
       errors: [
         {
           message: lines(
             'o/r#404 was not found, or the GitHub token has no access to it.',
-            'Next: check the reference for typos. If the issue was deleted, remove the TODO. If the repo is private, check that the GitHub token can read it.',
+            'Next: check the reference for typos. If the issue was deleted, remove the comment. If the repo is private, check that the GitHub token can read it.',
           ),
           column: 8,
           endColumn: 15,
@@ -51,8 +49,8 @@ tester.run('invalid', createInvalidRule(provider), {
       ],
     },
     {
-      code: `// TODO(old/name#1 ${SEEN})`,
-      output: `// TODO(new/name#1 ${SEEN})`,
+      code: `// TODO(old/name#1)`,
+      output: `// TODO(new/name#1)`,
       errors: [
         {
           message: lines(
@@ -64,17 +62,17 @@ tester.run('invalid', createInvalidRule(provider), {
       ],
     },
     {
-      code: `// TODO(https://github.com/old/name/issues/1#issuecomment-5 ${SEEN})`,
-      output: `// TODO(https://github.com/new/name/issues/1#issuecomment-5 ${SEEN})`,
+      code: `// TODO(https://github.com/old/name/issues/1#issuecomment-5)`,
+      output: `// TODO(https://github.com/new/name/issues/1#issuecomment-5)`,
       errors: [{ messageId: 'moved' }],
     },
     {
-      code: `// TODO(https://github.com/o/r/issues/7 ${SEEN})`,
-      output: `// TODO(https://github.com/other/repo/issues/3 ${SEEN})`,
+      code: `// TODO(https://github.com/o/r/issues/7)`,
+      output: `// TODO(https://github.com/other/repo/issues/3)`,
       errors: [{ message: /^https:\/\/github\.com\/o\/r\/issues\/7 has moved to other\/repo#3 "Crash on start"\./ }],
     },
     {
-      code: `// TODO(x/y#1 ${SEEN})\n// TODO(x/y#2 ${SEEN})`,
+      code: `// TODO(x/y#1)\n// TODO(x/y#2)`,
       errors: [
         { message: lines('Could not check the status of x/y#1: No GitHub token found.', NEXT_UNAVAILABLE), line: 1 },
       ],
@@ -86,7 +84,7 @@ tester.run('invalid with failing provider', createInvalidRule(throwingProvider),
   valid: ['// TODO: nothing to check'],
   invalid: [
     {
-      code: `// TODO(o/r#1 ${SEEN})`,
+      code: `// TODO(o/r#1)`,
       settings: { 'todo-watch': { verbose: false } },
       errors: [{ message: 'Could not check the status of o/r#1: worker timed out' }],
     },

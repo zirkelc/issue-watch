@@ -17,8 +17,6 @@ const rawIssue = (number: number): RawIssue => ({
   closedAt: null,
   repository: { nameWithOwner: 'o/r' },
   duplicateOf: null,
-  comments: { nodes: [] },
-  timelineItems: { nodes: [] },
   closedByPullRequestsReferences: { nodes: [] },
 });
 

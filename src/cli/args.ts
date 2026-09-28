@@ -1,8 +1,9 @@
 import { parseArgs } from 'node:util';
-import { AuthorPresets, DEFAULT_ISSUE_WATCH, DEFAULT_PULL_REQUEST_WATCH } from '../evaluate/activity.js';
+import { REPORTED_ISSUE_STATES, type ReportedIssueState } from '../evaluate/issue.js';
+import { REPORTED_PULL_REQUEST_STATES, type ReportedPullRequestState } from '../evaluate/pull-request.js';
 import { ALL_RULES, Severities, type RuleName, type Severity } from '../evaluate/types.js';
 import type { RefId } from '../github/types.js';
-import { DEFAULT_KEYWORDS, parseRef, parseWatch, WATCH_CATEGORIES, type WatchCategory } from '../parse.js';
+import { DEFAULT_KEYWORDS, parseRef } from '../parse.js';
 import { parseRepository } from '../service/repo.js';
 import { OutputFormats, type OutputFormat } from './report.js';
 
@@ -20,13 +21,11 @@ export type CliOptions = {
   failOn: FailLevel;
   refs: Array<RefId> | undefined;
   fix: boolean;
-  markSeen: boolean;
-  unwatch: Array<WatchCategory>;
   keywords: Array<string>;
   repo: string | undefined;
-  ignoreAuthors: Array<string>;
-  watchIssues: Array<WatchCategory>;
-  watchPullRequests: Array<WatchCategory>;
+  issueStates: Array<ReportedIssueState>;
+  pullRequestStates: Array<ReportedPullRequestState>;
+  linkedPullRequests: boolean;
   waitForRelease: boolean;
   expandShortRefs: boolean;
   cacheTtl: number;
@@ -63,20 +62,14 @@ Selection:
                              upstream, then origin, then package.json)
 
 Changes:
-  --fix                      Add missing seen markers and update moved references
-  --mark-seen                Mark new activity as seen. Use --ref to limit it
-  --unwatch <list>           Stop watching these kinds of activity on the
-                             references that report them. Use --ref to limit it
+  --fix                      Update moved references, and short references
+                             with --expand-short-refs
 
 Checks:
-  --ignore-authors <list>    Logins to ignore, plus ${AuthorPresets.BOTS} and ${AuthorPresets.SELF} (default: ${AuthorPresets.BOTS})
-  --watch <list>             Activity to report for issues and pull requests:
-                             ${WATCH_CATEGORIES.join(',')}
-  --watch-issues <list>      Activity to report for issues
-                             (default: --watch, else ${DEFAULT_ISSUE_WATCH.join(',')})
-  --watch-prs <list>         Activity to report for pull requests
-                             (default: --watch, else ${DEFAULT_PULL_REQUEST_WATCH.join(',')})
-  --wait-for-release         Report merged pull requests only when a release contains them
+  --issue-states <list>      Issue states to report (default: ${REPORTED_ISSUE_STATES.join(',')})
+  --pr-states <list>         Pull request states to report (default: ${REPORTED_PULL_REQUEST_STATES.join(',')})
+  --no-linked-prs            Do not report open issues with a merged linked pull request
+  --wait-for-release         Report a fix only when a release contains it
   --expand-short-refs        Report short references; --fix replaces them with URLs
 
 Cache:
@@ -114,14 +107,11 @@ export const parseCliArgs = (argv: Array<string>): CliOptions => {
         'fail-on': { type: 'string', default: FailLevels.ERROR },
         ref: { type: 'string', multiple: true },
         fix: { type: 'boolean', default: false },
-        'mark-seen': { type: 'boolean', default: false },
-        unwatch: { type: 'string' },
         keywords: { type: 'string' },
         repo: { type: 'string' },
-        'ignore-authors': { type: 'string' },
-        watch: { type: 'string' },
-        'watch-issues': { type: 'string' },
-        'watch-prs': { type: 'string' },
+        'issue-states': { type: 'string' },
+        'pr-states': { type: 'string' },
+        'no-linked-prs': { type: 'boolean', default: false },
         'wait-for-release': { type: 'boolean', default: false },
         'expand-short-refs': { type: 'boolean', default: false },
         'cache-ttl': { type: 'string' },
@@ -153,18 +143,6 @@ export const parseCliArgs = (argv: Array<string>): CliOptions => {
   }
   if (values['no-cache']) cacheTtl = 0;
 
-  const watchList = (name: string, value: string | undefined, fallback: Array<WatchCategory>) => {
-    if (value === undefined) return fallback;
-    const categories = parseWatch(value);
-    if (!categories) {
-      throw new UsageError(
-        `Invalid value "${value}" for --${name}. Use a list of: ${WATCH_CATEGORIES.join(', ')}, or none.`,
-      );
-    }
-    return categories;
-  };
-  const watch = values.watch === undefined ? undefined : watchList('watch', values.watch, []);
-
   if (values.repo !== undefined && !parseRepository(values.repo)) {
     throw new UsageError(`Invalid value "${values.repo}" for --repo. Use owner/name.`);
   }
@@ -176,13 +154,15 @@ export const parseCliArgs = (argv: Array<string>): CliOptions => {
     failOn: oneOf('fail-on', values['fail-on'], Object.values(FailLevels)),
     refs,
     fix: values.fix,
-    markSeen: values['mark-seen'],
-    unwatch: (list(values.unwatch) ?? []).map((category) => oneOf('unwatch', category, WATCH_CATEGORIES)),
     keywords: list(values.keywords) ?? DEFAULT_KEYWORDS,
     repo: values.repo,
-    ignoreAuthors: list(values['ignore-authors']) ?? [AuthorPresets.BOTS],
-    watchIssues: watchList('watch-issues', values['watch-issues'], watch ?? DEFAULT_ISSUE_WATCH),
-    watchPullRequests: watchList('watch-prs', values['watch-prs'], watch ?? DEFAULT_PULL_REQUEST_WATCH),
+    issueStates: (list(values['issue-states']) ?? REPORTED_ISSUE_STATES).map((state) =>
+      oneOf('issue-states', state, REPORTED_ISSUE_STATES),
+    ),
+    pullRequestStates: (list(values['pr-states']) ?? REPORTED_PULL_REQUEST_STATES).map((state) =>
+      oneOf('pr-states', state, REPORTED_PULL_REQUEST_STATES),
+    ),
+    linkedPullRequests: !values['no-linked-prs'],
     waitForRelease: values['wait-for-release'],
     expandShortRefs: values['expand-short-refs'],
     cacheTtl,

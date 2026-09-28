@@ -1,12 +1,5 @@
 import type { Context } from '@oxlint/plugins';
-import {
-  parseTodos,
-  type Repository,
-  type SeenMarker,
-  type TodoEntry,
-  type TodoRef,
-  type WatchMarker,
-} from '../parse.js';
+import { parseTodos, type Repository, type TodoEntry, type TodoRef } from '../parse.js';
 
 /**
  * Length of the comment opener (`//` or `/*`) that is not part of the comment value.
@@ -34,8 +27,6 @@ export type EntryInFile = {
 
 export type RefInFile = EntryInFile & {
   ref: TodoRef;
-  seen: SeenMarker | undefined;
-  watch: WatchMarker | undefined;
 };
 
 /**
@@ -77,5 +68,5 @@ export const findRefs = (
   repository: Repository | undefined,
 ): Array<RefInFile> =>
   findEntries(context, keywords, repository).flatMap((found) =>
-    found.entry.ref ? [{ ...found, ref: found.entry.ref, seen: found.entry.seen, watch: found.entry.watch }] : [],
+    found.entry.ref ? [{ ...found, ref: found.entry.ref }] : [],
   );

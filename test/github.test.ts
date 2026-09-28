@@ -17,8 +17,6 @@ const rawIssue = (overrides: Partial<RawIssue> = {}): RawIssue => ({
   closedAt: null,
   repository: { nameWithOwner: 'o/r' },
   duplicateOf: null,
-  comments: { nodes: [] },
-  timelineItems: { nodes: [] },
   closedByPullRequestsReferences: { nodes: [] },
   ...overrides,
 });
@@ -32,12 +30,8 @@ const rawPullRequest = (overrides: Partial<RawPullRequest> = {}): RawPullRequest
   createdAt: '2026-01-01T00:00:00Z',
   closedAt: null,
   mergedAt: null,
-  isDraft: false,
   repository: { nameWithOwner: 'o/r' },
   mergeCommit: null,
-  comments: { nodes: [] },
-  reviews: { nodes: [] },
-  timelineItems: { nodes: [] },
   ...overrides,
 });
 
@@ -85,48 +79,13 @@ const fetchOptions = (releaseCache = new Map<string, CachedRelease>()) => ({
 });
 
 describe('fetchStatuses', () => {
-  test(`should normalize an issue with comments, events and linked pull requests`, async () => {
+  test(`should normalize an issue with linked pull requests`, async () => {
     // Arrange
     const { client, graphql } = fakeClient({
       statuses: () => ({
         data: {
-          viewer: { login: 'me' },
           r0: {
             issueOrPullRequest: rawIssue({
-              comments: {
-                nodes: [
-                  {
-                    url: 'u1',
-                    createdAt: '2026-02-01T00:00:00Z',
-                    bodyText: 'I can reproduce it',
-                    author: { __typename: 'User', login: 'alice' },
-                  },
-                  {
-                    url: 'u2',
-                    createdAt: '2026-02-02T00:00:00Z',
-                    bodyText: 'Update dependency',
-                    author: { __typename: 'Bot', login: 'renovate' },
-                  },
-                  { url: 'u3', createdAt: '2026-02-03T00:00:00Z', bodyText: '', author: null },
-                ],
-              },
-              timelineItems: {
-                nodes: [
-                  { __typename: 'LabeledEvent', createdAt: '2026-02-04T00:00:00Z', label: { name: 'bug' } },
-                  {
-                    __typename: 'CrossReferencedEvent',
-                    createdAt: '2026-02-05T00:00:00Z',
-                    willCloseTarget: true,
-                    source: { url: 'https://github.com/o/r/pull/5' },
-                  },
-                  {
-                    __typename: 'CrossReferencedEvent',
-                    createdAt: '2026-02-06T00:00:00Z',
-                    willCloseTarget: false,
-                    source: { url: 'https://github.com/o/r/pull/6' },
-                  },
-                ],
-              },
               closedByPullRequestsReferences: {
                 nodes: [
                   {
@@ -134,7 +93,6 @@ describe('fetchStatuses', () => {
                     title: 'Fix the crash',
                     url: 'https://github.com/o/r/pull/5',
                     state: 'OPEN',
-                    createdAt: '2026-02-04T12:00:00Z',
                     mergedAt: null,
                     closedAt: null,
                     mergeCommit: null,
@@ -156,19 +114,21 @@ describe('fetchStatuses', () => {
     const result = results.get('o/r#1');
     expect(result?.ok).toBe(true);
     if (!result?.ok || result.status.type !== 'issue') throw new Error('unexpected result');
-    expect(result.viewer).toBe('me');
     expect(result.fetchedAt).toBe(NOW.toISOString());
-    expect(result.status.comments.map((comment) => comment.author)).toEqual([
-      { login: 'alice', isBot: false },
-      { login: 'renovate', isBot: true },
-      undefined,
-    ]);
     expect(result.status.title).toBe('Crash on start');
-    expect(result.status.comments[0]?.body).toBe('I can reproduce it');
-    expect(result.status.linkedPullRequests[0]?.title).toBe('Fix the crash');
-    expect(result.status.events).toEqual([{ type: 'labeled', createdAt: '2026-02-04T00:00:00Z', detail: 'bug' }]);
-    expect(result.status.linkedPullRequests.map((linked) => [linked.number, linked.linkedAt])).toEqual([
-      [5, '2026-02-05T00:00:00Z'],
+    expect(result.status.linkedPullRequests).toEqual([
+      {
+        owner: 'o',
+        repo: 'r',
+        number: 5,
+        title: 'Fix the crash',
+        url: 'https://github.com/o/r/pull/5',
+        state: 'OPEN',
+        mergedAt: undefined,
+        closedAt: undefined,
+        mergeCommit: undefined,
+        release: undefined,
+      },
     ]);
   });
 

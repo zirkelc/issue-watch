@@ -4,13 +4,11 @@ import { join } from 'node:path';
 import { RuleTester } from 'oxlint/plugins-dev';
 import { describe, expect, test } from 'vitest';
 import { createWorkerProvider } from '../src/plugin/provider.js';
-import { createResolvedRule } from '../src/plugin/rules.js';
+import { createPullRequestRule } from '../src/plugin/rules.js';
 import { emptyCache, resolveCacheFile, writeCache } from '../src/service/cache.js';
 import { issue, ok, pullRequest, setupRuleTester } from './fixtures.js';
 
 setupRuleTester(RuleTester);
-
-const SEEN = 'seen=2026-09-01T00:00Z';
 
 const request = (cwd: string, numbers: Array<number>) => ({
   refs: numbers.map((number) => ({ owner: 'o', repo: 'r', number })),
@@ -56,10 +54,10 @@ const throwingProvider = () => {
   throw new Error('must not be called');
 };
 
-new RuleTester().run('resolved with network off', createResolvedRule(throwingProvider), {
+new RuleTester().run('pull-request with network off', createPullRequestRule(throwingProvider), {
   valid: [
     {
-      code: `// TODO(o/r#2 ${SEEN})`,
+      code: `// TODO(o/r#2)`,
       settings: { 'todo-watch': { network: 'off' } },
     },
   ],
@@ -67,8 +65,8 @@ new RuleTester().run('resolved with network off', createResolvedRule(throwingPro
 });
 
 new RuleTester().run(
-  'resolved in cache-only mode',
-  createResolvedRule((received) => {
+  'pull-request in cache-only mode',
+  createPullRequestRule((received) => {
     expect(received.cacheOnly).toBe(true);
     return { 'o/r#2': ok(pullRequest({ state: 'CLOSED', closedAt: '2026-09-21T00:00:00Z' })) };
   }),
@@ -76,7 +74,7 @@ new RuleTester().run(
     valid: [],
     invalid: [
       {
-        code: `// TODO(o/r#2 ${SEEN})`,
+        code: `// TODO(o/r#2)`,
         settings: { 'todo-watch': { network: 'cache-only', verbose: false } },
         errors: [{ message: 'o/r#2 "Fix crash on start" was closed without merge on 2026-09-21.' }],
       },
