@@ -1,7 +1,7 @@
 import type { Context } from '@oxlint/plugins';
 import { FailureReasons, toRefKey, type StatusResult } from '../github/types.js';
 import type { StatusProvider } from './provider.js';
-import { getSettings, NetworkModes } from './settings.js';
+import { getSettings, NetworkModes, projectRepository } from './settings.js';
 import { findRefs, type RefInFile } from './todos.js';
 
 /**
@@ -17,7 +17,7 @@ export const visitRefStatuses = (
   const settings = getSettings(context.settings);
   if (settings.network === NetworkModes.OFF) return;
 
-  const refs = findRefs(context, settings.keywords);
+  const refs = findRefs(context, settings.keywords, projectRepository(context.cwd, settings));
   if (refs.length === 0) return;
 
   let response: Record<string, StatusResult>;
@@ -29,6 +29,7 @@ export const visitRefStatuses = (
       cacheTtl: settings.cacheTtl,
       prefetch: settings.prefetch,
       cacheOnly: settings.network === NetworkModes.CACHE_ONLY,
+      repo: settings.repo,
     });
   } catch (error) {
     const failure: StatusResult = {

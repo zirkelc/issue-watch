@@ -24,7 +24,7 @@ export type Problem = {
   summary: string;
   details: Array<string>;
   fixable: boolean;
-  suggestion: string | undefined;
+  suggestions: Array<string>;
 };
 
 const lineStarts = (text: string) => {
@@ -59,7 +59,7 @@ export const toProblems = (result: CheckResult): Array<Problem> =>
       summary: finding.summary,
       details: finding.details,
       fixable: finding.fix !== undefined,
-      suggestion: finding.suggestion?.description,
+      suggestions: (finding.suggestions ?? []).map((suggestion) => suggestion.description),
     }));
   });
 

@@ -1,5 +1,5 @@
 import { FailureReasons, formatRef, toRefKey, type StatusResult } from '../github/types.js';
-import { RefKinds, type TodoRef } from '../parse.js';
+import { formatShortRef, RefKinds, type TodoRef } from '../parse.js';
 import { describeTarget, fixCommand } from './messages.js';
 import { editOf, RuleNames, type Finding, type RefTarget, type Tool } from './types.js';
 
@@ -14,10 +14,12 @@ const URL_PREFIX_RE = /^https?:\/\/(?:www\.)?github\.com\/[^/]+\/[^/]+\/(?:issue
 
 /**
  * Builds the new text of a moved reference. A URL keeps everything after the number, like a
- * comment hash, and a short reference stays short.
+ * comment hash. A short reference stays short, and `#123` stays local if the target is still in
+ * the repository of the project.
  */
-const movedText = (ref: TodoRef, target: { owner: string; repo: string; number: number; url: string }) => {
+export const replacementText = (ref: TodoRef, target: { owner: string; repo: string; number: number; url: string }) => {
   if (ref.kind === RefKinds.SHORT) return formatRef(target);
+  if (ref.kind === RefKinds.LOCAL) return formatShortRef(target, ref);
 
   const suffix = ref.text.replace(URL_PREFIX_RE, '');
   return `${target.url}${suffix}`;
@@ -60,7 +62,7 @@ export const evaluateInvalid = (target: RefTarget, result: StatusResult, tool: T
   const { status } = result;
   if (toRefKey(status) === toRefKey(ref)) return [];
 
-  const replacement = movedText(ref, status);
+  const replacement = replacementText(ref, status);
   return [
     {
       ...base,

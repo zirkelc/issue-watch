@@ -87,6 +87,25 @@ const provider = fakeProvider({
       state: 'CLOSED',
       closedAt: '2026-09-02T00:00:00Z',
       comments: [comment(6, '2026-09-02T00:00:00Z')],
+      events: [{ type: 'closed', createdAt: '2026-09-02T00:00:00Z', detail: 'not planned' }],
+    }),
+  ),
+  'o/r#12': ok(
+    pullRequest({
+      number: 12,
+      state: 'MERGED',
+      mergedAt: '2026-09-03T00:00:00Z',
+      closedAt: '2026-09-03T00:00:00Z',
+      release: { state: 'released', tag: 'v2.0.0', url: 'https://github.com/o/r/releases/tag/v2.0.0', exact: true },
+      events: [{ type: 'closed', createdAt: '2026-09-03T00:00:01Z' }],
+    }),
+  ),
+  'o/r#13': ok(
+    pullRequest({
+      number: 13,
+      state: 'CLOSED',
+      closedAt: '2026-09-04T00:00:00Z',
+      events: [{ type: 'closed', createdAt: '2026-09-04T00:00:00Z' }],
     }),
   ),
   'o/r#10': ok(issue({ number: 10, comments: [comment(7, '2026-08-01T00:00:00Z')] })),
@@ -101,13 +120,21 @@ const provider = fakeProvider({
 new RuleTester().run('activity', createActivityRule(provider), {
   valid: [
     `// TODO(o/r#10 ${SEEN})`,
-    `// TODO(o/r#9 ${SEEN})`,
+    `// TODO(o/r#9 ${SEEN} watch=labels)`,
+    `// TODO(o/r#12 ${SEEN})`,
+    `// TODO(o/r#13 ${SEEN})`,
     '// TODO(o/r#1)',
     '// TODO(o/r#1 seen=invalid)',
     `// TODO(o/r#404 ${SEEN})`,
     {
       code: `// TODO(o/r#1 seen=2026-09-03T00:00Z)`,
       options: [{ ignoreAuthors: ['bots', 'self'] }],
+    },
+    `// TODO(o/r#1 ${SEEN} watch=none)`,
+    `// TODO(o/r#3 ${SEEN} watch=comments)`,
+    {
+      code: `// TODO(o/r#1 ${SEEN})`,
+      options: [{ issues: { watch: ['state'] } }],
     },
   ],
   invalid: [
@@ -127,6 +154,10 @@ new RuleTester().run('activity', createActivityRule(provider), {
             {
               messageId: 'markSeen',
               output: `// TODO(https://github.com/o/r/issues/1#issuecomment-1 ${MARKED}): remove workaround`,
+            },
+            {
+              desc: 'Stop watching comments on https://github.com/o/r/issues/1#issuecomment-1.',
+              output: `// TODO(https://github.com/o/r/issues/1#issuecomment-1 ${SEEN} watch=state,links): remove workaround`,
             },
           ],
         },
@@ -179,8 +210,25 @@ new RuleTester().run('activity', createActivityRule(provider), {
     },
     {
       code: `// TODO(o/r#3 ${SEEN})`,
-      options: [{ include: ['labels', 'milestones'] }],
+      options: [{ issues: { watch: ['state', 'labels', 'milestones'] } }],
       errors: [{ message: /: reopened, labeled "bug", added to milestone "v2"\./ }],
+    },
+    {
+      code: `// TODO(o/r#3 ${SEEN} watch=labels)`,
+      errors: [
+        {
+          message: /: labeled "bug"\./,
+          suggestions: [
+            { messageId: 'markSeen', output: `// TODO(o/r#3 ${MARKED} watch=labels)` },
+            { messageId: 'unwatch', output: `// TODO(o/r#3 ${SEEN} watch=none)` },
+          ],
+        },
+      ],
+    },
+    {
+      code: `// TODO(o/r#8 ${SEEN})`,
+      options: [{ pullRequests: { watch: ['reviews'] }, issues: { watch: ['comments'] } }],
+      errors: [{ message: /: approved by bob, changes requested by carol\./ }],
     },
     {
       code: `// TODO(o/r#4 ${SEEN})`,
@@ -199,13 +247,20 @@ new RuleTester().run('activity', createActivityRule(provider), {
       errors: [
         {
           message: lines(
-            'o/r#8 "Fix crash on start" was updated since 2026-09-01T10:00Z: ready for review, approved by bob, changes requested by carol.',
+            'o/r#8 "Fix crash on start" was updated since 2026-09-01T10:00Z: ready for review.',
             'URL: https://github.com/o/r/pull/8',
             next(SEEN),
           ),
-          suggestions: [{ messageId: 'markSeen', output: `// TODO(o/r#8 ${MARKED})` }],
+          suggestions: [
+            { messageId: 'markSeen', output: `// TODO(o/r#8 ${MARKED})` },
+            { messageId: 'unwatch', output: `// TODO(o/r#8 ${SEEN} watch=comments)` },
+          ],
         },
       ],
+    },
+    {
+      code: `// TODO(o/r#9 ${SEEN} watch=comments,state)`,
+      errors: [{ message: /^o\/r#9 "Crash on start" was updated since 2026-09-01T10:00Z: 1 new comment\.\n/ }],
     },
   ],
 });

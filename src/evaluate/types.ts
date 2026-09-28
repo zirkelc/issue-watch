@@ -1,4 +1,4 @@
-import type { SeenMarker, Token, TodoRef } from '../parse.js';
+import type { SeenMarker, Token, TodoRef, WatchCategory, WatchMarker } from '../parse.js';
 
 export const RuleNames = {
   FORMAT: 'format',
@@ -60,12 +60,16 @@ export type Finding = {
   ref: TodoRef | undefined;
   /** A safe change that `--fix` applies. */
   fix?: Edit;
-  /** A change that needs a decision, like marking activity as seen. */
-  suggestion?: {
-    messageId: string;
-    description: string;
-    edit: Edit;
-  };
+  /** Changes that need a decision, like marking activity as seen. */
+  suggestions?: Array<Suggestion>;
+};
+
+export type Suggestion = {
+  messageId: string;
+  description: string;
+  edit: Edit;
+  /** The activity category that the suggestion stops watching. */
+  category?: WatchCategory;
 };
 
 /**
@@ -74,6 +78,7 @@ export type Finding = {
 export type RefTarget = {
   ref: TodoRef;
   seen: SeenMarker | undefined;
+  watch?: WatchMarker | undefined;
 };
 
 const DETAIL_SEPARATOR = '\n  ';

@@ -1,8 +1,9 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { check, type CheckOptions, type CheckResult } from '../check.js';
-import { MARK_SEEN_MESSAGE_ID } from '../evaluate/activity.js';
+import { MARK_SEEN_MESSAGE_ID, UNWATCH_MESSAGE_ID } from '../evaluate/activity.js';
 import { Severities, type Edit } from '../evaluate/types.js';
+import { formatWatch, parseWatch } from '../parse.js';
 import { HELP, parseCliArgs, shouldFail, UsageError, type CliOptions } from './args.js';
 import { applyEdits } from './edits.js';
 import { formatReport, toProblems } from './report.js';
@@ -27,17 +28,38 @@ const toCheckOptions = (options: CliOptions, deps: RunDeps): CheckOptions => ({
   rules: options.rules,
   refs: options.refs,
   keywords: options.keywords,
+  repo: options.repo,
   cacheTtl: options.cacheTtl,
   format: { expandShortRefs: options.expandShortRefs },
   resolved: { waitForRelease: options.waitForRelease },
-  activity: { ignoreAuthors: options.ignoreAuthors, include: options.include },
+  activity: {
+    ignoreAuthors: options.ignoreAuthors,
+    issues: { watch: options.watchIssues },
+    pullRequests: { watch: options.watchPullRequests },
+  },
   getStatuses: deps.getStatuses,
   now: deps.now,
 });
 
+const WATCH_TEXT_RE = /^(\s*)watch=(\S+)$/;
+
 /**
- * Collects the edits for `--fix` and `--mark-seen` and writes the changed files. Returns the
- * number of applied edits.
+ * Combines the edits that stop watching single categories into one edit. They all change the same
+ * marker, and each one lists the watched categories without its own, so the combined list is the
+ * intersection of all lists.
+ */
+const combineUnwatch = (edits: Array<Edit>): Edit => {
+  const [first] = edits as [Edit, ...Array<Edit>];
+  const lists = edits.map((edit) => parseWatch(WATCH_TEXT_RE.exec(edit.text)?.[2] ?? '') ?? []);
+  const remaining = lists.reduce((kept, list) => kept.filter((category) => list.includes(category)));
+  const prefix = WATCH_TEXT_RE.exec(first.text)?.[1] ?? '';
+
+  return { ...first, text: `${prefix}watch=${formatWatch(remaining)}` };
+};
+
+/**
+ * Collects the edits for `--fix`, `--mark-seen` and `--unwatch` and writes the changed files.
+ * Returns the number of applied edits.
  */
 const applyChanges = (result: CheckResult, options: CliOptions, deps: RunDeps): number => {
   const writeFile = deps.writeFile ?? ((path, text) => writeFileSync(path, text));
@@ -47,9 +69,18 @@ const applyChanges = (result: CheckResult, options: CliOptions, deps: RunDeps): 
     const edits: Array<Edit> = [];
     for (const finding of file.findings) {
       if (options.fix && finding.fix) edits.push(finding.fix);
-      if (options.markSeen && finding.suggestion?.messageId === MARK_SEEN_MESSAGE_ID) {
-        edits.push(finding.suggestion.edit);
+      for (const suggestion of finding.suggestions ?? []) {
+        if (options.markSeen && suggestion.messageId === MARK_SEEN_MESSAGE_ID) edits.push(suggestion.edit);
       }
+
+      /** Several categories change the same marker, so they are combined into one edit. */
+      const unwatch = (finding.suggestions ?? []).filter(
+        (suggestion) =>
+          suggestion.messageId === UNWATCH_MESSAGE_ID &&
+          suggestion.category &&
+          options.unwatch.includes(suggestion.category),
+      );
+      if (unwatch.length > 0) edits.push(combineUnwatch(unwatch.map((suggestion) => suggestion.edit)));
     }
     if (edits.length === 0) continue;
 
@@ -89,7 +120,7 @@ export const run = async (argv: Array<string>, deps: RunDeps): Promise<number> =
   const checkOptions = toCheckOptions(options, deps);
   let result = await check(checkOptions);
 
-  if (options.fix || options.markSeen) {
+  if (options.fix || options.markSeen || options.unwatch.length > 0) {
     let total = 0;
     for (let pass = 0; pass < MAX_FIX_PASSES; pass++) {
       const applied = applyChanges(result, options, deps);

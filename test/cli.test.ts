@@ -162,7 +162,7 @@ describe('run', () => {
         '  Next: keep the workaround until a release contains the fix. Then upgrade and remove the TODO and its workaround.',
         '',
         'a.ts:2:9  error  format',
-        '  Missing seen marker for "o/r#3". Add " seen=2026-09-28T12:00Z" after the reference, or run `todo-watch --fix`.',
+        '  Missing seen marker for "o/r#3". Add " seen=2026-09-28T12:00Z" (the current time) after the reference, or run `todo-watch --fix`.',
         '',
         '2 problems (1 error, 1 warning) in 2 references. 1 can be fixed with --fix.',
         '',
@@ -223,7 +223,7 @@ describe('run', () => {
         'Next: read the news and update the code if needed. Then mark it as seen: replace "seen=2026-09-01T00:00Z" with "seen=2026-09-28T10:15Z", or run `todo-watch --mark-seen --ref o/r#1`.',
       ],
       fixable: false,
-      suggestion: 'Mark o/r#1 as seen.',
+      suggestions: ['Mark o/r#1 as seen.', 'Stop watching comments on o/r#1.'],
     });
   });
 
@@ -258,7 +258,7 @@ describe('run', () => {
 
     // Assert
     expect(stdout.split('\n')[0]).toBe(
-      'a.ts:2:9  error  format  Missing seen marker for "o/r#3". Add " seen=2026-09-28T12:00Z" after the reference, or run `todo-watch --fix`.',
+      'a.ts:2:9  error  format  Missing seen marker for "o/r#3". Add " seen=2026-09-28T12:00Z" (the current time) after the reference, or run `todo-watch --fix`.',
     );
     expect(stdout).not.toContain('resolved');
   });
@@ -350,5 +350,84 @@ describe('check in a git repository', () => {
 
     // Assert
     expect(result.files.map((file) => file.path)).toEqual(['a.ts']);
+  });
+});
+
+describe('run with local references and watch markers', () => {
+  test(`should resolve #123 with --repo`, async () => {
+    // Arrange
+    const cwd = project({ 'a.ts': `// TODO(#2 ${SEEN})\n` });
+
+    // Act
+    const { stdout } = await runCli(['--repo', 'o/r', '--compact'], cwd);
+
+    // Assert
+    expect(stdout.split('\n')[0]).toBe(
+      'a.ts:1:9  warning  resolved  o/r#2 "Fix crash on start" was merged on 2026-09-20, not released yet.',
+    );
+  });
+
+  test(`should stop watching categories with --unwatch`, async () => {
+    // Arrange
+    const cwd = project({ 'a.ts': `// TODO(o/r#1 ${SEEN})\n` });
+
+    // Act
+    const { code, stderr } = await runCli(['--unwatch', 'comments,labels'], cwd);
+
+    // Assert
+    expect(code).toBe(0);
+    expect(stderr).toBe('Applied 1 change.\n');
+    expect(readFileSync(join(cwd, 'a.ts'), 'utf8')).toBe(`// TODO(o/r#1 ${SEEN} watch=state,links)\n`);
+  });
+
+  test(`should use --watch as default for all references`, async () => {
+    // Arrange
+    const cwd = project({ 'a.ts': `// TODO(o/r#1 ${SEEN})\n// TODO(o/r#1 ${SEEN} watch=comments)\n` });
+
+    // Act
+    const { stdout } = await runCli(['--watch', 'state', '--compact'], cwd);
+
+    // Assert
+    expect(stdout).toContain('a.ts:2:9  warning  activity');
+    expect(stdout).not.toContain('a.ts:1:9');
+  });
+
+  test(`should reject invalid watch lists`, async () => {
+    // Arrange
+    const cwd = project({});
+
+    // Act
+    const { code, stderr } = await runCli(['--watch-prs', 'reviews,foo'], cwd);
+
+    // Assert
+    expect(code).toBe(2);
+    expect(stderr).toContain('Invalid value "reviews,foo" for --watch-prs.');
+  });
+
+  test(`should add the seen marker from the commit that added the reference`, async () => {
+    // Arrange
+    const cwd = project({ 'a.ts': '// TODO(o/r#3): workaround\n' });
+    const git = (args: Array<string>) =>
+      execFileSync('git', args, {
+        cwd,
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 'Test',
+          GIT_AUTHOR_EMAIL: 'test@example.com',
+          GIT_COMMITTER_NAME: 'Test',
+          GIT_COMMITTER_EMAIL: 'test@example.com',
+          GIT_AUTHOR_DATE: '2025-04-05T06:07:08Z',
+          GIT_COMMITTER_DATE: '2025-04-05T06:07:08Z',
+        },
+      });
+    git(['init', '-q']);
+    git(['add', '.']);
+    git(['commit', '-q', '-m', 'add todo']);
+
+    // Act
+    await runCli(['--fix', '--rules', 'format'], cwd);
+
+    // Assert
+    expect(readFileSync(join(cwd, 'a.ts'), 'utf8')).toBe('// TODO(o/r#3 seen=2025-04-05T06:07Z): workaround\n');
   });
 });

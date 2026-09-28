@@ -1,5 +1,6 @@
 import type { Settings } from '@oxlint/plugins';
-import { DEFAULT_KEYWORDS } from '../parse.js';
+import { DEFAULT_KEYWORDS, type Repository } from '../parse.js';
+import { resolveRepository } from '../service/repo.js';
 
 export const PLUGIN_NAME = 'todo-watch';
 
@@ -33,6 +34,8 @@ export type TodoWatchSettings = {
   verbose: boolean;
   /** How the network rules get the status of references. */
   network: NetworkMode;
+  /** The `owner/name` that `#123` references point to. Detected from git or package.json if not set. */
+  repo: string | undefined;
 };
 
 const NETWORK_MODES = new Set<string>(Object.values(NetworkModes));
@@ -55,5 +58,13 @@ export const getSettings = (settings: Readonly<Settings>): TodoWatchSettings => 
       ? (own.network as NetworkMode)
       : NetworkModes.FETCH;
 
-  return { keywords, cacheTtl, prefetch, verbose, network };
+  const repo = typeof own.repo === 'string' && own.repo.length > 0 ? own.repo : undefined;
+
+  return { keywords, cacheTtl, prefetch, verbose, network, repo };
 };
+
+/**
+ * The repository that `#123` references in the linted project point to.
+ */
+export const projectRepository = (cwd: string, settings: TodoWatchSettings): Repository | undefined =>
+  resolveRepository(cwd, settings.repo);

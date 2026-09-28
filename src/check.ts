@@ -4,9 +4,12 @@ import { evaluateInvalid, UNAVAILABLE_MESSAGE_ID } from './evaluate/invalid.js';
 import { evaluateResolved, type ResolvedOptions } from './evaluate/resolved.js';
 import { ALL_RULES, RuleNames, Tools, type Finding, type RuleName, type Tool } from './evaluate/types.js';
 import { toRefKey, type RefId, type RefKey } from './github/types.js';
+import { join } from 'node:path';
 import { DEFAULT_KEYWORDS, parseTodos, type TodoEntry } from './parse.js';
 import { listFiles, readSourceFile } from './service/files.js';
 import { createStatusHandler, type StatusRequest, type StatusResponse } from './service/handler.js';
+import { createHistoryLookup, type AddedAtLookup } from './service/history.js';
+import { resolveRepository } from './service/repo.js';
 
 const DEFAULT_CACHE_TTL_MINUTES = 60;
 
@@ -20,6 +23,8 @@ export type CheckOptions = {
   /** Check only these references. */
   refs?: Array<RefId>;
   keywords?: Array<string>;
+  /** The `owner/name` that `#123` references point to. Detected from git or package.json if not set. */
+  repo?: string;
   /** How long a fetched status stays valid, in minutes. `0` always fetches. */
   cacheTtl?: number;
   format?: Partial<FormatOptions>;
@@ -30,6 +35,8 @@ export type CheckOptions = {
   now?: Date;
   /** Loads statuses from GitHub. Defaults to a handler with cache and token lookup. */
   getStatuses?: (request: StatusRequest) => Promise<StatusResponse>;
+  /** Finds when a reference was added, for its first seen marker. Defaults to git history. */
+  addedAt?: AddedAtLookup;
 };
 
 export type FileReport = {
@@ -46,6 +53,10 @@ export type CheckResult = {
 };
 
 let defaultHandler: ReturnType<typeof createStatusHandler> | undefined;
+let defaultAddedAt: AddedAtLookup | undefined;
+
+/** The 1-based line of an offset. */
+const lineOf = (text: string, offset: number) => text.slice(0, offset).split('\n').length;
 
 /**
  * Checks all TODO references in the given paths, with the same checks as the lint rules. Unlike
@@ -58,6 +69,8 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
   const tool = options.tool ?? Tools.CLI;
   const now = options.now ?? new Date();
   const only = options.refs ? new Set(options.refs.map(toRefKey)) : undefined;
+  const repository = resolveRepository(cwd, options.repo);
+  const addedAt = options.addedAt ?? (defaultAddedAt ??= createHistoryLookup());
 
   const formatOptions: FormatOptions = { expandShortRefs: false, ...options.format };
   const resolvedOptions: ResolvedOptions = { waitForRelease: false, ...options.resolved };
@@ -68,7 +81,7 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
     const file = readSourceFile(cwd, path);
     if (!file) continue;
 
-    const entries = parseTodos(file.text, keywords)
+    const entries = parseTodos(file.text, keywords, repository)
       .flatMap((todo) => todo.entries)
       .filter((entry) => !only || (entry.ref && only.has(toRefKey(entry.ref))));
     if (entries.length > 0) files.push({ ...file, entries });
@@ -91,6 +104,7 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
       keywords,
       cacheTtl: options.cacheTtl ?? DEFAULT_CACHE_TTL_MINUTES,
       prefetch: false,
+      repo: options.repo,
     });
   }
 
@@ -101,13 +115,21 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
     const findings: Array<Finding> = [];
 
     for (const entry of entries) {
-      if (rules.has(RuleNames.FORMAT)) findings.push(...evaluateFormat(entry, formatOptions, now, tool));
+      if (rules.has(RuleNames.FORMAT)) {
+        findings.push(
+          ...evaluateFormat(entry, formatOptions, {
+            now,
+            tool,
+            addedAt: (ref) => addedAt(join(cwd, path), ref.text, lineOf(text, ref.start)),
+          }),
+        );
+      }
 
       const { ref, seen } = entry;
       const result = ref ? statuses[toRefKey(ref)] : undefined;
       if (!ref || !result) continue;
 
-      const target = { ref, seen };
+      const target = { ref, seen, watch: entry.watch };
       if (rules.has(RuleNames.INVALID)) {
         for (const finding of evaluateInvalid(target, result, tool)) {
           if (finding.messageId === UNAVAILABLE_MESSAGE_ID) {

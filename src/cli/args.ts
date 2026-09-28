@@ -1,8 +1,9 @@
 import { parseArgs } from 'node:util';
-import { AuthorPresets, OptionalEvents, type OptionalEvent } from '../evaluate/activity.js';
+import { AuthorPresets, DEFAULT_ISSUE_WATCH, DEFAULT_PULL_REQUEST_WATCH } from '../evaluate/activity.js';
 import { ALL_RULES, Severities, type RuleName, type Severity } from '../evaluate/types.js';
 import type { RefId } from '../github/types.js';
-import { DEFAULT_KEYWORDS, parseRef } from '../parse.js';
+import { DEFAULT_KEYWORDS, parseRef, parseWatch, WATCH_CATEGORIES, type WatchCategory } from '../parse.js';
+import { parseRepository } from '../service/repo.js';
 import { OutputFormats, type OutputFormat } from './report.js';
 
 export const FailLevels = {
@@ -20,9 +21,12 @@ export type CliOptions = {
   refs: Array<RefId> | undefined;
   fix: boolean;
   markSeen: boolean;
+  unwatch: Array<WatchCategory>;
   keywords: Array<string>;
+  repo: string | undefined;
   ignoreAuthors: Array<string>;
-  include: Array<OptionalEvent>;
+  watchIssues: Array<WatchCategory>;
+  watchPullRequests: Array<WatchCategory>;
   waitForRelease: boolean;
   expandShortRefs: boolean;
   cacheTtl: number;
@@ -55,14 +59,23 @@ Selection:
   --rules <list>             Rules to run (default: ${ALL_RULES.join(',')})
   --ref <owner/repo#123>     Check only this reference. Can be repeated
   --keywords <list>          Comment keywords (default: ${DEFAULT_KEYWORDS.join(',')})
+  --repo <owner/name>        Repository of #123 references (default: git remote
+                             upstream, then origin, then package.json)
 
 Changes:
   --fix                      Add missing seen markers and update moved references
   --mark-seen                Mark new activity as seen. Use --ref to limit it
+  --unwatch <list>           Stop watching these kinds of activity on the
+                             references that report them. Use --ref to limit it
 
 Checks:
   --ignore-authors <list>    Logins to ignore, plus ${AuthorPresets.BOTS} and ${AuthorPresets.SELF} (default: ${AuthorPresets.BOTS})
-  --include <list>           Also report ${Object.values(OptionalEvents).join(' and ')}
+  --watch <list>             Activity to report for issues and pull requests:
+                             ${WATCH_CATEGORIES.join(',')}
+  --watch-issues <list>      Activity to report for issues
+                             (default: --watch, else ${DEFAULT_ISSUE_WATCH.join(',')})
+  --watch-prs <list>         Activity to report for pull requests
+                             (default: --watch, else ${DEFAULT_PULL_REQUEST_WATCH.join(',')})
   --wait-for-release         Report merged pull requests only when a release contains them
   --expand-short-refs        Report short references; --fix replaces them with URLs
 
@@ -102,9 +115,13 @@ export const parseCliArgs = (argv: Array<string>): CliOptions => {
         ref: { type: 'string', multiple: true },
         fix: { type: 'boolean', default: false },
         'mark-seen': { type: 'boolean', default: false },
+        unwatch: { type: 'string' },
         keywords: { type: 'string' },
+        repo: { type: 'string' },
         'ignore-authors': { type: 'string' },
-        include: { type: 'string' },
+        watch: { type: 'string' },
+        'watch-issues': { type: 'string' },
+        'watch-prs': { type: 'string' },
         'wait-for-release': { type: 'boolean', default: false },
         'expand-short-refs': { type: 'boolean', default: false },
         'cache-ttl': { type: 'string' },
@@ -136,6 +153,22 @@ export const parseCliArgs = (argv: Array<string>): CliOptions => {
   }
   if (values['no-cache']) cacheTtl = 0;
 
+  const watchList = (name: string, value: string | undefined, fallback: Array<WatchCategory>) => {
+    if (value === undefined) return fallback;
+    const categories = parseWatch(value);
+    if (!categories) {
+      throw new UsageError(
+        `Invalid value "${value}" for --${name}. Use a list of: ${WATCH_CATEGORIES.join(', ')}, or none.`,
+      );
+    }
+    return categories;
+  };
+  const watch = values.watch === undefined ? undefined : watchList('watch', values.watch, []);
+
+  if (values.repo !== undefined && !parseRepository(values.repo)) {
+    throw new UsageError(`Invalid value "${values.repo}" for --repo. Use owner/name.`);
+  }
+
   return {
     paths: positionals.length > 0 ? positionals : ['.'],
     format: oneOf('format', values.format, Object.values(OutputFormats)),
@@ -144,9 +177,12 @@ export const parseCliArgs = (argv: Array<string>): CliOptions => {
     refs,
     fix: values.fix,
     markSeen: values['mark-seen'],
+    unwatch: (list(values.unwatch) ?? []).map((category) => oneOf('unwatch', category, WATCH_CATEGORIES)),
     keywords: list(values.keywords) ?? DEFAULT_KEYWORDS,
+    repo: values.repo,
     ignoreAuthors: list(values['ignore-authors']) ?? [AuthorPresets.BOTS],
-    include: (list(values.include) ?? []).map((event) => oneOf('include', event, Object.values(OptionalEvents))),
+    watchIssues: watchList('watch-issues', values['watch-issues'], watch ?? DEFAULT_ISSUE_WATCH),
+    watchPullRequests: watchList('watch-prs', values['watch-prs'], watch ?? DEFAULT_PULL_REQUEST_WATCH),
     waitForRelease: values['wait-for-release'],
     expandShortRefs: values['expand-short-refs'],
     cacheTtl,

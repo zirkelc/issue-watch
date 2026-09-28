@@ -10,6 +10,7 @@ import {
   type StatusResult,
 } from '../github/types.js';
 import { RefKinds } from '../parse.js';
+import { replacementText } from './invalid.js';
 import { describeRelease, describeTarget, formatDate } from './messages.js';
 import { editOf, RuleNames, type Finding, type RefTarget } from './types.js';
 
@@ -109,7 +110,8 @@ export const evaluateResolved = (target: RefTarget, result: StatusResult, option
       ];
     }
 
-    const replacement = ref.kind === RefKinds.SHORT ? formatRef(duplicate) : duplicate.url;
+    /** A hash like `#issuecomment-1` belongs to the closed issue, so a URL gets the plain URL. */
+    const replacement = ref.kind === RefKinds.URL ? duplicate.url : replacementText(ref, duplicate);
     return [
       {
         ...finding(
@@ -117,11 +119,13 @@ export const evaluateResolved = (target: RefTarget, result: StatusResult, option
           `${name} was closed as a duplicate of ${describeTarget(duplicate)} on ${date}.`,
           `Next: replace "${ref.text}" with "${replacement}". Keep the seen marker.`,
         ),
-        suggestion: {
-          messageId: 'replaceWithDuplicate',
-          description: `Replace the reference with ${formatRef(duplicate)}.`,
-          edit: editOf(ref, replacement),
-        },
+        suggestions: [
+          {
+            messageId: 'replaceWithDuplicate',
+            description: `Replace the reference with ${formatRef(duplicate)}.`,
+            edit: editOf(ref, replacement),
+          },
+        ],
       },
     ];
   }

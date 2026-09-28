@@ -35,11 +35,46 @@ tester.run('format', formatRule, {
       settings: { 'todo-watch': { keywords: ['TODO'] } },
     },
     {
+      code: `// TODO(#12 ${SEEN} watch=comments,links)`,
+      settings: { 'todo-watch': { repo: 'vitest-dev/vitest' } },
+    },
+    {
       code: `// TODO(o/r#1 ${SEEN})`,
       options: [{ expandShortRefs: false }],
     },
   ],
   invalid: [
+    {
+      code: `// TODO(#12 ${SEEN})`,
+      settings: { 'todo-watch': { repo: 'not a repo!' } },
+      errors: [
+        {
+          message:
+            '"#12" needs the repository of the project, but none was found. Add a GitHub remote named upstream or origin, set "repository" in package.json, or set settings["todo-watch"].repo to "owner/name".',
+        },
+      ],
+    },
+    {
+      code: `// TODO(#12 ${SEEN})`,
+      output: `// TODO(https://github.com/vitest-dev/vitest/issues/12 ${SEEN})`,
+      options: [{ expandShortRefs: true }],
+      settings: { 'todo-watch': { repo: 'vitest-dev/vitest' } },
+      errors: [{ messageId: 'shortRef' }],
+    },
+    {
+      code: `// TODO(o/r#1 ${SEEN} watch=comments,lables)`,
+      errors: [
+        {
+          message:
+            'Invalid watch marker "watch=comments,lables". Use a list without spaces of comments, state, links, reviews, labels, milestones, like watch=comments,links, or watch=none.',
+          column: 37,
+        },
+      ],
+    },
+    {
+      code: `// TODO(o/r#1 ${SEEN} watch=comments, links)`,
+      errors: [{ messageId: 'invalidWatch' }, { messageId: 'unexpectedText' }],
+    },
     {
       code: '// TODO(https://github.com/o/r/issues/1)',
       output: `// TODO(https://github.com/o/r/issues/1 ${SEEN})`,
@@ -56,7 +91,7 @@ tester.run('format', formatRule, {
       errors: [
         {
           message:
-            'Missing seen marker for "o/r#2". Add " seen=2026-09-28T08:51Z" after the reference, or run the linter with --fix.',
+            'Missing seen marker for "o/r#2". Add " seen=2026-09-28T08:51Z" (the current time) after the reference, or run the linter with --fix.',
         },
       ],
     },

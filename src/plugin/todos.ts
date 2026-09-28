@@ -1,5 +1,12 @@
 import type { Context } from '@oxlint/plugins';
-import { parseTodos, type SeenMarker, type TodoEntry, type TodoRef } from '../parse.js';
+import {
+  parseTodos,
+  type Repository,
+  type SeenMarker,
+  type TodoEntry,
+  type TodoRef,
+  type WatchMarker,
+} from '../parse.js';
 
 /**
  * Length of the comment opener (`//` or `/*`) that is not part of the comment value.
@@ -28,13 +35,18 @@ export type EntryInFile = {
 export type RefInFile = EntryInFile & {
   ref: TodoRef;
   seen: SeenMarker | undefined;
+  watch: WatchMarker | undefined;
 };
 
 /**
  * Finds all TODO entries in the comments of the current file, with helpers that convert the
  * offsets inside a comment to source ranges and locations.
  */
-export const findEntries = (context: Context, keywords: Array<string>): Array<EntryInFile> => {
+export const findEntries = (
+  context: Context,
+  keywords: Array<string>,
+  repository: Repository | undefined,
+): Array<EntryInFile> => {
   const { sourceCode } = context;
   const entries: Array<EntryInFile> = [];
 
@@ -48,7 +60,7 @@ export const findEntries = (context: Context, keywords: Array<string>): Array<En
       end: sourceCode.getLocFromIndex(base + span.end),
     });
 
-    for (const todo of parseTodos(comment.value, keywords)) {
+    for (const todo of parseTodos(comment.value, keywords, repository)) {
       for (const entry of todo.entries) entries.push({ entry, locOf, rangeOf });
     }
   }
@@ -59,7 +71,11 @@ export const findEntries = (context: Context, keywords: Array<string>): Array<En
 /**
  * Finds all entries with a valid reference. Entries without reference are left to the format rule.
  */
-export const findRefs = (context: Context, keywords: Array<string>): Array<RefInFile> =>
-  findEntries(context, keywords).flatMap((found) =>
-    found.entry.ref ? [{ ...found, ref: found.entry.ref, seen: found.entry.seen }] : [],
+export const findRefs = (
+  context: Context,
+  keywords: Array<string>,
+  repository: Repository | undefined,
+): Array<RefInFile> =>
+  findEntries(context, keywords, repository).flatMap((found) =>
+    found.entry.ref ? [{ ...found, ref: found.entry.ref, seen: found.entry.seen, watch: found.entry.watch }] : [],
   );

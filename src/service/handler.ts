@@ -14,6 +14,8 @@ export type StatusRequest = {
   prefetch: boolean;
   /** Answer from the cache file only, without requests. */
   cacheOnly?: boolean;
+  /** The `owner/name` that `#123` references point to, if configured. */
+  repo?: string;
 };
 
 export type StatusResponse = Record<RefKey, StatusResult>;
@@ -22,7 +24,7 @@ export type HandlerDeps = {
   createClient: (token: string) => GithubClient;
   resolveToken: () => string | undefined;
   now: () => Date;
-  scan: (cwd: string, keywords: Array<string>) => Array<RefId>;
+  scan: (cwd: string, keywords: Array<string>, repo: string | undefined) => Array<RefId>;
   cacheFile: (cwd: string) => string | undefined;
 };
 
@@ -78,7 +80,7 @@ export const createStatusHandler = (overrides: Partial<HandlerDeps> = {}) => {
     const wanted = new Map(request.refs.map((ref) => [toRefKey(ref), ref]));
     if (request.prefetch && !scanned.has(cwd)) {
       scanned.add(cwd);
-      for (const ref of deps.scan(cwd, request.keywords)) {
+      for (const ref of deps.scan(cwd, request.keywords, request.repo)) {
         const key = toRefKey(ref);
         if (!wanted.has(key)) wanted.set(key, ref);
       }

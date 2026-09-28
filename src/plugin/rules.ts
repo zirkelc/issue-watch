@@ -3,15 +3,17 @@ import {
   DEFAULT_ACTIVITY_OPTIONS,
   evaluateActivity,
   MARK_SEEN_MESSAGE_ID,
-  OptionalEvents,
+  UNWATCH_MESSAGE_ID,
   type ActivityOptions,
 } from '../evaluate/activity.js';
 import { evaluateFormat, type FormatOptions } from '../evaluate/format.js';
 import { evaluateInvalid, UNAVAILABLE_MESSAGE_ID, type InvalidOptions } from '../evaluate/invalid.js';
 import { evaluateResolved, type ResolvedOptions } from '../evaluate/resolved.js';
 import { formatMessage, Tools, type Finding } from '../evaluate/types.js';
+import { WATCH_CATEGORIES } from '../parse.js';
+import { createHistoryLookup } from '../service/history.js';
 import type { StatusProvider } from './provider.js';
-import { getSettings } from './settings.js';
+import { getSettings, projectRepository } from './settings.js';
 import { visitRefStatuses } from './status.js';
 import { findEntries, type EntryInFile } from './todos.js';
 
@@ -22,22 +24,20 @@ const messagesFor = (ids: Array<string>) => Object.fromEntries(ids.map((id) => [
 
 const report = (context: Context, { locOf, rangeOf }: Omit<EntryInFile, 'entry'>, finding: Finding) => {
   const { verbose } = getSettings(context.settings);
-  const { fix, suggestion } = finding;
+  const { fix, suggestions = [] } = finding;
 
   context.report({
     loc: locOf(finding.token),
     messageId: finding.messageId,
     data: { message: formatMessage(finding, verbose) },
     ...(fix ? { fix: (fixer) => fixer.replaceTextRange(rangeOf(fix), fix.text) } : {}),
-    ...(suggestion
+    ...(suggestions.length > 0
       ? {
-          suggest: [
-            {
-              messageId: suggestion.messageId,
-              data: { message: suggestion.description },
-              fix: (fixer) => fixer.replaceTextRange(rangeOf(suggestion.edit), suggestion.edit.text),
-            },
-          ],
+          suggest: suggestions.map((suggestion) => ({
+            messageId: suggestion.messageId,
+            data: { message: suggestion.description },
+            fix: (fixer) => fixer.replaceTextRange(rangeOf(suggestion.edit), suggestion.edit.text),
+          })),
         }
       : {}),
   });
@@ -48,12 +48,27 @@ const optionsOf = <OPTIONS extends object>(context: Context, defaults: OPTIONS):
   ...(context.options[0] as Partial<OPTIONS> | undefined),
 });
 
+/**
+ * Git history is read only for references without a seen marker, and each result is kept for the
+ * lifetime of the process.
+ */
+const addedAt = createHistoryLookup();
+
 export const formatRule = defineRule({
   meta: {
     type: 'problem',
     fixable: 'code',
     docs: { description: 'Enforce a valid GitHub reference and seen marker in TODO comments.' },
-    messages: messagesFor(['invalidRef', 'unexpectedText', 'missingSeen', 'invalidSeen', 'futureSeen', 'shortRef']),
+    messages: messagesFor([
+      'invalidRef',
+      'missingRepo',
+      'unexpectedText',
+      'missingSeen',
+      'invalidSeen',
+      'futureSeen',
+      'invalidWatch',
+      'shortRef',
+    ]),
     schema: [
       {
         type: 'object',
@@ -65,15 +80,21 @@ export const formatRule = defineRule({
   },
   create(context) {
     const options = optionsOf<FormatOptions>(context, { expandShortRefs: false });
-    const { keywords } = getSettings(context.settings);
+    const settings = getSettings(context.settings);
 
     return {
       Program() {
         const now = new Date();
-        for (const found of findEntries(context, keywords)) {
-          for (const finding of evaluateFormat(found.entry, options, now, Tools.LINT)) {
-            report(context, found, finding);
-          }
+        const found = findEntries(context, settings.keywords, projectRepository(context.cwd, settings));
+
+        for (const entryInFile of found) {
+          const { locOf } = entryInFile;
+          const findings = evaluateFormat(entryInFile.entry, options, {
+            now,
+            tool: Tools.LINT,
+            addedAt: (ref) => addedAt(context.physicalFilename, ref.text, locOf(ref).start.line),
+          });
+          for (const finding of findings) report(context, entryInFile, finding);
         }
       },
     };
@@ -157,6 +178,12 @@ export const createResolvedRule = (provider: StatusProvider): Rule =>
     },
   });
 
+const WATCH_SCHEMA = {
+  type: 'object',
+  properties: { watch: { type: 'array', items: { type: 'string', enum: WATCH_CATEGORIES } } },
+  additionalProperties: false,
+} as const;
+
 export const createActivityRule = (provider: StatusProvider): Rule =>
   defineRule({
     meta: {
@@ -165,13 +192,14 @@ export const createActivityRule = (provider: StatusProvider): Rule =>
       docs: {
         description: 'Report new activity on open GitHub issues and pull requests since the seen marker of a TODO.',
       },
-      messages: messagesFor(['activity', MARK_SEEN_MESSAGE_ID]),
+      messages: messagesFor(['activity', MARK_SEEN_MESSAGE_ID, UNWATCH_MESSAGE_ID]),
       schema: [
         {
           type: 'object',
           properties: {
             ignoreAuthors: { type: 'array', items: { type: 'string' } },
-            include: { type: 'array', items: { type: 'string', enum: Object.values(OptionalEvents) } },
+            issues: WATCH_SCHEMA,
+            pullRequests: WATCH_SCHEMA,
           },
           additionalProperties: false,
         },
