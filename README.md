@@ -1,7 +1,7 @@
 <div align='center'>
 
 <picture>
-  <img src="assets/screenshot.png" alt="Oxlint output with a issue-watch warning for a closed issue and one for a merged pull request" width="800" />
+  <img src="assets/screenshot.png" alt="A TypeScript file with two TODO comments that link GitHub references, and the oxlint output with an issue-watch warning for the closed issue and one for the merged pull request" width="800" />
 </picture>
 
 <p align="center">Watch GitHub issues and PRs linked in TODO comments</p>
