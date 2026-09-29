@@ -20,12 +20,11 @@ Both ways run the same checks, print the same messages, and share one cache.
 
 ## Why?
 
-You link an upstream issue or pull request in a comment, and then you forget it. However, you want to know when:
+You link an upstream issue or pull request in a comment, and then you forget about it. However, you want to know when:
 
-- **A fix lands**: The pull request is merged, or it is contained in a release
-- **An issue is resolved**: It is closed as completed, as not planned, or as a duplicate of another issue
+- **A fix landed**: The pull request is merged, or it is contained in a release
+- **An issue is resolved**: It is closed, marked as completed or not planned
 - **A linked fix is merged**: The issue is still open, but a pull request that closes it was merged
-- **A link goes bad**: The repo was renamed, the issue was transferred, or it does not exist
 
 This library reports these states for every linked reference, with the next step to take.
 
@@ -53,19 +52,19 @@ export const alias = { '@app/utils': './packages/app-utils/src' };
 Nothing else is needed. Existing comments in this format are checked as they are. To also check other keywords like `FIXME` or `HACK`, use `--keywords` in the CLI or the `keywords` setting.
 
 ```ts
-/** A URL keeps its path and hash, and stays clickable in the editor. */
+/** Full URL with its path and hash, and it stays clickable in the editor. */
 // TODO(https://github.com/vitest-dev/vitest/issues/11363#issuecomment-5866925885)
 
-/** The short form. */
+/** Short form. */
 // TODO(vitest-dev/vitest#11363)
 
-/** An issue or pull request in the repository of your project. */
+/** An issue or pull request in the repository of your current project. */
 // TODO(#42)
 
 /** More than one reference. */
 // TODO(vitest-dev/vitest#11363, oxc-project/oxc#27134)
 
-/** Not checked: a TODO without a GitHub reference, or a plain link. */
+/** Skipped: a TODO without a GitHub reference, or a plain link. */
 // TODO(zirkelc): clean up
 // See https://github.com/vitest-dev/vitest/issues/11363
 ```
@@ -114,7 +113,6 @@ Add the plugin to `.oxlintrc.json` and enable the rules:
 {
   "jsPlugins": ["todo-watch/oxlint"],
   "rules": {
-    "todo-watch/format": "error",
     "todo-watch/invalid": "error",
     "todo-watch/issue": "warn",
     "todo-watch/pull-request": "warn"
