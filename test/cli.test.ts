@@ -28,7 +28,7 @@ const getStatuses = async (request: Parameters<ReturnType<typeof fakeProvider>>[
  * Creates a project outside of git, so files are found by walking the directory.
  */
 const project = (files: Record<string, string>) => {
-  const cwd = mkdtempSync(join(tmpdir(), 'todo-watch-cli-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'issue-watch-cli-'));
   for (const [path, text] of Object.entries(files)) {
     mkdirSync(dirname(join(cwd, path)), { recursive: true });
     writeFileSync(join(cwd, path), text);
@@ -155,7 +155,7 @@ describe('run', () => {
         'a.ts:2:9  error  invalid',
         '  old/name#3 has moved to o/r#3 "Crash on start".',
         '  URL: https://github.com/o/r/issues/3',
-        '  Next: run `todo-watch --fix`, or replace "old/name#3" with "o/r#3".',
+        '  Next: run `issue-watch --fix`, or replace "old/name#3" with "o/r#3".',
         '',
         '2 problems (1 error, 1 warning) in 2 references. 1 can be fixed with --fix.',
         '',
@@ -230,7 +230,7 @@ describe('run', () => {
     // Assert
     expect(stdout).toBe(
       [
-        '## todo-watch',
+        '## issue-watch',
         '',
         '### `a.ts`',
         '',
@@ -312,7 +312,7 @@ describe('run', () => {
 
     // Assert
     expect(code).toBe(2);
-    expect(stderr).toBe(`${message}\nRun todo-watch --help for usage.\n`);
+    expect(stderr).toBe(`${message}\nRun issue-watch --help for usage.\n`);
   });
 
   test(`should reject unknown options`, async () => {
@@ -337,7 +337,7 @@ describe('run', () => {
 
     // Assert
     expect(help.code).toBe(0);
-    expect(help.stdout).toContain('Usage: todo-watch [options] [paths...]');
+    expect(help.stdout).toContain('Usage: issue-watch [options] [paths...]');
     expect(version.stdout).toBe('1.2.3\n');
   });
 });

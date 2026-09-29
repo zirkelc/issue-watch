@@ -11,7 +11,7 @@ export type InvalidOptions = {
 export const UNAVAILABLE_MESSAGE_ID = 'unavailable';
 
 const repoSetting = (tool: Tool) =>
-  tool === Tools.CLI ? 'run todo-watch with --repo owner/name' : 'set settings["todo-watch"].repo to "owner/name"';
+  tool === Tools.CLI ? 'run issue-watch with --repo owner/name' : 'set settings["issue-watch"].repo to "owner/name"';
 
 /**
  * Reports a TODO entry that looks like a GitHub reference but cannot be checked: a URL that is

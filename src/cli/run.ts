@@ -62,7 +62,7 @@ export const run = async (argv: Array<string>, deps: RunDeps): Promise<number> =
     options = parseCliArgs(argv);
   } catch (error) {
     if (!(error instanceof UsageError)) throw error;
-    deps.stderr(`${error.message}\nRun todo-watch --help for usage.\n`);
+    deps.stderr(`${error.message}\nRun issue-watch --help for usage.\n`);
     return 2;
   }
 

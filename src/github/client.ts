@@ -57,7 +57,7 @@ export const createClient = (token: string, fetchFn: typeof fetch = fetch): Gith
   const headers = {
     authorization: `bearer ${token}`,
     accept: 'application/vnd.github+json',
-    'user-agent': 'oxlint-plugin-todo-watch',
+    'user-agent': 'issue-watch',
   };
 
   const request = async (path: string, init?: RequestInit) => {

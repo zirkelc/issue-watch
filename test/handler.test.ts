@@ -144,7 +144,7 @@ describe('createStatusHandler', () => {
 
   test(`should persist the cache to disk and read it in a new handler`, async () => {
     // Arrange
-    const file = join(mkdtempSync(join(tmpdir(), 'todo-watch-')), 'cache.json');
+    const file = join(mkdtempSync(join(tmpdir(), 'issue-watch-')), 'cache.json');
     const first = setup({ cacheFile: () => file });
     await first.handler(request([1]));
     const second = setup({ cacheFile: () => file });

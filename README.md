@@ -1,19 +1,19 @@
 <p align="center">
-  <img src="assets/screenshot.png" alt="Oxlint output with a todo-watch warning for a closed issue and one for a merged pull request" width="800" />
+  <img src="assets/screenshot.png" alt="Oxlint output with a issue-watch warning for a closed issue and one for a merged pull request" width="800" />
 </p>
 
 <div align="center">
 
 <p align="center">Watch GitHub issues and PRs linked in TODO comments</p>
 <p align="center">
-  <a href="https://www.npmjs.com/package/todo-watch" alt="todo-watch"><img src="https://img.shields.io/npm/dt/todo-watch?label=todo-watch"></a> <a href="https://github.com/zirkelc/todo-watch/actions/workflows/ci.yml" alt="CI"><img src="https://img.shields.io/github/actions/workflow/status/zirkelc/todo-watch/ci.yml?branch=main"></a>
+  <a href="https://www.npmjs.com/package/issue-watch" alt="issue-watch"><img src="https://img.shields.io/npm/dt/issue-watch?label=issue-watch"></a> <a href="https://github.com/zirkelc/issue-watch/actions/workflows/ci.yml" alt="CI"><img src="https://img.shields.io/github/actions/workflow/status/zirkelc/issue-watch/ci.yml?branch=main"></a>
 </p>
 
 </div>
 
 This library checks `TODO(...)` comments that link a GitHub issue or pull request, and tells you when the linked issue is closed or the linked pull request is merged. You can use it in two ways:
 
-- **Standalone:** run `npx todo-watch` when you want to know what changed, by hand, in CI, or from a coding agent.
+- **Standalone:** run `npx issue-watch` when you want to know what changed, by hand, in CI, or from a coding agent.
 - **As lint rules:** add it to [Oxlint](https://oxc.rs/docs/guide/usage/linter/js-plugins) or [ESLint](https://eslint.org/docs/latest/use/configure/plugins), and see the status of each linked issue in your editor and lint output.
 
 Both ways run the same checks, print the same messages, and share one cache.
@@ -31,10 +31,10 @@ This library reports these states for every linked reference, with the next step
 ## Installation
 
 ```bash
-npm install --save-dev todo-watch
+npm install --save-dev issue-watch
 ```
 
-For the standalone CLI, you can also run it without installation: `npx todo-watch`.
+For the standalone CLI, you can also run it without installation: `npx issue-watch`.
 
 A GitHub token is needed to read issues and pull requests. It is read from `GITHUB_TOKEN` or `GH_TOKEN`. If neither is set, it is read from the [GitHub CLI](https://cli.github.com/) with `gh auth token`.
 
@@ -78,7 +78,7 @@ Nothing else is needed. Existing comments in this format are checked as they are
 Run the CLI in your project. It checks all tracked files in the git repository, in any language, including Markdown:
 
 ```bash
-npx todo-watch
+npx issue-watch
 ```
 
 ```
@@ -98,18 +98,18 @@ src/reporter.ts:3:9  warning  pull-request
 The commands you use most:
 
 ```bash
-npx todo-watch --fix                    # update moved references
-npx todo-watch src docs                 # check only these paths
-npx todo-watch --wait-for-release       # report fixes only when they are released
-npx todo-watch --format json            # for agents and scripts
-npx todo-watch --format markdown        # for a pull request comment or an issue
+npx issue-watch --fix                    # update moved references
+npx issue-watch src docs                 # check only these paths
+npx issue-watch --wait-for-release       # report fixes only when they are released
+npx issue-watch --format json            # for agents and scripts
+npx issue-watch --format markdown        # for a pull request comment or an issue
 ```
 
 The exit code is `0` without errors, `1` with errors, and `2` for invalid options. Use `--fail-on warn` to also fail on warnings. All options are listed in [Options](#options).
 
 ### Options
 
-`todo-watch [options] [paths...]` checks the tracked and not ignored files below the paths. Paths default to the current directory. `node_modules` is always skipped.
+`issue-watch [options] [paths...]` checks the tracked and not ignored files below the paths. Paths default to the current directory. `node_modules` is always skipped.
 
 | Option                   | Default  | Description                                                        |
 | ------------------------ | -------- | ------------------------------------------------------------------ |
@@ -134,7 +134,7 @@ The CLI runs the same [rules](#rules) as the lint plugin, and the rule options a
 ```json
 {
   "scripts": {
-    "todos": "todo-watch --keywords TODO,FIXME,HACK --wait-for-release"
+    "todos": "issue-watch --keywords TODO,FIXME,HACK --wait-for-release"
   }
 }
 ```
@@ -145,11 +145,11 @@ Add the plugin to `.oxlintrc.json` and enable the rules:
 
 ```json
 {
-  "jsPlugins": ["todo-watch/oxlint"],
+  "jsPlugins": ["issue-watch/oxlint"],
   "rules": {
-    "todo-watch/invalid": "error",
-    "todo-watch/issue": "warn",
-    "todo-watch/pull-request": "warn"
+    "issue-watch/invalid": "error",
+    "issue-watch/issue": "warn",
+    "issue-watch/pull-request": "warn"
   }
 }
 ```
@@ -157,9 +157,9 @@ Add the plugin to `.oxlintrc.json` and enable the rules:
 For ESLint 9, use the recommended config, which enables the same three rules:
 
 ```js
-import todoWatch from 'todo-watch/eslint';
+import issueWatch from 'issue-watch/eslint';
 
-export default [todoWatch.configs.recommended];
+export default [issueWatch.configs.recommended];
 ```
 
 The rules show the same messages as the CLI. `oxlint --fix` updates moved references.
@@ -169,12 +169,12 @@ The rules show the same messages as the CLI. `oxlint --fix` updates moved refere
 
 ### Settings
 
-Settings are shared by all rules and go under `settings["todo-watch"]`:
+Settings are shared by all rules and go under `settings["issue-watch"]`:
 
 ```json
 {
   "settings": {
-    "todo-watch": {
+    "issue-watch": {
       "network": "fetch",
       "keywords": ["TODO", "FIXME", "HACK"],
       "cacheTtl": 60,
@@ -257,8 +257,8 @@ In the lint config, options go after the severity. You can give each rule its ow
 ```json
 {
   "rules": {
-    "todo-watch/issue": ["warn", { "states": ["completed", "duplicate"], "waitForRelease": true }],
-    "todo-watch/pull-request": ["error", { "states": ["merged"] }]
+    "issue-watch/issue": ["warn", { "states": ["completed", "duplicate"], "waitForRelease": true }],
+    "issue-watch/pull-request": ["error", { "states": ["merged"] }]
   }
 }
 ```
@@ -274,19 +274,19 @@ Lint and CLI runs are often done by coding agents, so every message has enough c
 
 ### Cache
 
-Statuses are cached in `node_modules/.cache/todo-watch/github.json`, or in the temp directory if the project has no `node_modules`. The CLI and the lint rules use the same file. "Not found" results are cached too. Network and token errors are not cached. A release that contains a merge commit is cached forever.
+Statuses are cached in `node_modules/.cache/issue-watch/github.json`, or in the temp directory if the project has no `node_modules`. The CLI and the lint rules use the same file. "Not found" results are cached too. Network and token errors are not cached. A release that contains a merge commit is cached forever.
 
 **Using the CLI and the lint plugin together:** by default, the lint rules fetch statuses from GitHub themselves. The first lint run without a cache then waits a few seconds for GitHub, and so does the editor. To keep linting as fast as without the plugin, let the rules read only the cache, and refresh the cache with the CLI when you want new statuses:
 
 ```json
 {
-  "jsPlugins": ["todo-watch/oxlint"],
-  "settings": { "todo-watch": { "network": "cache-only" } }
+  "jsPlugins": ["issue-watch/oxlint"],
+  "settings": { "issue-watch": { "network": "cache-only" } }
 }
 ```
 
 ```bash
-npx todo-watch   # fetches all references and fills the cache that the lint rules read
+npx issue-watch   # fetches all references and fills the cache that the lint rules read
 ```
 
 | `network`         | Lint rules                                                               |
@@ -296,7 +296,7 @@ npx todo-watch   # fetches all references and fills the cache that the lint rule
 | `off`             | No statuses at all. Only references that cannot be parsed are reported   |
 
 > [!TIP]
-> In CI, cache `node_modules/.cache/todo-watch` between runs. Otherwise every CI run fetches all references once.
+> In CI, cache `node_modules/.cache/issue-watch` between runs. Otherwise every CI run fetches all references once.
 
 ### Releases
 

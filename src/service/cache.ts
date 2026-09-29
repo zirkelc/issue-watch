@@ -21,10 +21,10 @@ export const emptyCache = (): CacheData => ({ version: CACHE_VERSION, statuses: 
  */
 export const resolveCacheFile = (cwd: string): string => {
   const nodeModules = join(cwd, 'node_modules');
-  if (existsSync(nodeModules)) return join(nodeModules, '.cache', 'todo-watch', 'github.json');
+  if (existsSync(nodeModules)) return join(nodeModules, '.cache', 'issue-watch', 'github.json');
 
   const hash = createHash('sha1').update(cwd).digest('hex').slice(0, 12);
-  return join(tmpdir(), 'todo-watch', `${hash}.json`);
+  return join(tmpdir(), 'issue-watch', `${hash}.json`);
 };
 
 export const readCache = (file: string): CacheData => {

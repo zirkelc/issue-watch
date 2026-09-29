@@ -106,7 +106,7 @@ const formatJson = (problems: Array<Problem>, refCount: number): string =>
   )}\n`;
 
 const formatMarkdown = (problems: Array<Problem>, refCount: number, compact: boolean): string => {
-  const lines = ['## todo-watch', ''];
+  const lines = ['## issue-watch', ''];
   if (problems.length === 0) {
     lines.push(`No problems found in ${plural(refCount, 'reference')}.`);
     return `${lines.join('\n')}\n`;

@@ -1,5 +1,5 @@
 {
-  "name": "todo-watch",
+  "name": "issue-watch",
   "version": "1.0.0",
   "description": "Watch GitHub issues and PRs linked in TODO comments",
   "keywords": [
@@ -18,10 +18,10 @@
   "author": "Chris Cook",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zirkelc/todo-watch.git"
+    "url": "git+https://github.com/zirkelc/issue-watch.git"
   },
   "bin": {
-    "todo-watch": "./dist/cli.mjs"
+    "issue-watch": "./dist/cli.mjs"
   },
   "files": [
     "dist"

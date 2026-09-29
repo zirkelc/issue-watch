@@ -34,7 +34,7 @@ export const describeRelease = (release: Release | undefined): string => {
  * Names the command that applies the safe fixes in the tool that shows the finding.
  */
 export const fixCommand = (tool: Tool): string =>
-  tool === Tools.CLI ? 'run `todo-watch --fix`' : 'run the linter with --fix';
+  tool === Tools.CLI ? 'run `issue-watch --fix`' : 'run the linter with --fix';
 
 /**
  * The next step after a fix was merged, depending on its release.

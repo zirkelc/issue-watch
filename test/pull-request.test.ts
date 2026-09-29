@@ -106,7 +106,7 @@ new RuleTester().run('pull-request', createPullRequestRule(provider), {
     },
     {
       code: '// TODO(o/r#20)',
-      settings: { 'todo-watch': { verbose: false } },
+      settings: { 'issue-watch': { verbose: false } },
       errors: [{ message: 'o/r#20 "Fix crash on start" was merged on 2026-09-20, not released yet.' }],
     },
     {

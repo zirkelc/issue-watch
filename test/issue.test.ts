@@ -218,7 +218,7 @@ new RuleTester().run('issue', createIssueRule(provider), {
     },
     {
       code: '// TODO(o/r#11)',
-      settings: { 'todo-watch': { verbose: false } },
+      settings: { 'issue-watch': { verbose: false } },
       errors: [{ message: 'o/r#11 "Crash on start" was closed as not planned on 2026-09-11.' }],
     },
     {

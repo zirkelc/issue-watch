@@ -22,7 +22,7 @@ const request = (cwd: string, numbers: Array<number>) => ({
 describe('createWorkerProvider in cache-only mode', () => {
   test(`should answer from the cache file without a worker`, () => {
     // Arrange
-    const cwd = mkdtempSync(join(tmpdir(), 'todo-watch-cache-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'issue-watch-cache-'));
     mkdirSync(join(cwd, 'node_modules'));
     const cache = emptyCache();
     cache.statuses['o/r#1'] = { ...ok(issue()), fetchedAt: '2020-01-01T00:00:00.000Z' };
@@ -39,7 +39,7 @@ describe('createWorkerProvider in cache-only mode', () => {
 
   test(`should answer nothing without a cache file`, () => {
     // Arrange
-    const cwd = mkdtempSync(join(tmpdir(), 'todo-watch-cache-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'issue-watch-cache-'));
     const provider = createWorkerProvider('/does/not/exist.mjs');
 
     // Act
@@ -58,7 +58,7 @@ new RuleTester().run('pull-request with network off', createPullRequestRule(thro
   valid: [
     {
       code: `// TODO(o/r#2)`,
-      settings: { 'todo-watch': { network: 'off' } },
+      settings: { 'issue-watch': { network: 'off' } },
     },
   ],
   invalid: [],
@@ -75,7 +75,7 @@ new RuleTester().run(
     invalid: [
       {
         code: `// TODO(o/r#2)`,
-        settings: { 'todo-watch': { network: 'cache-only', verbose: false } },
+        settings: { 'issue-watch': { network: 'cache-only', verbose: false } },
         errors: [{ message: 'o/r#2 "Fix crash on start" was closed without merge on 2026-09-21.' }],
       },
     ],

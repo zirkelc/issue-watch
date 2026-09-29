@@ -2,7 +2,7 @@ import type { Settings } from '@oxlint/plugins';
 import { DEFAULT_KEYWORDS, type Repository } from '../parse.js';
 import { resolveRepository } from '../service/repo.js';
 
-export const PLUGIN_NAME = 'todo-watch';
+export const PLUGIN_NAME = 'issue-watch';
 
 const DEFAULT_CACHE_TTL_MINUTES = 60;
 
@@ -18,9 +18,9 @@ export const NetworkModes = {
 export type NetworkMode = (typeof NetworkModes)[keyof typeof NetworkModes];
 
 /**
- * Settings shared by all rules, configured under `settings["todo-watch"]`.
+ * Settings shared by all rules, configured under `settings["issue-watch"]`.
  */
-export type TodoWatchSettings = {
+export type IssueWatchSettings = {
   /** Comment keywords that are followed by references in parentheses. */
   keywords: Array<string>;
   /** How long a fetched status stays valid, in minutes. */
@@ -40,7 +40,7 @@ export type TodoWatchSettings = {
 
 const NETWORK_MODES = new Set<string>(Object.values(NetworkModes));
 
-export const getSettings = (settings: Readonly<Settings>): TodoWatchSettings => {
+export const getSettings = (settings: Readonly<Settings>): IssueWatchSettings => {
   const raw = settings[PLUGIN_NAME];
   const own = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
 
@@ -66,5 +66,5 @@ export const getSettings = (settings: Readonly<Settings>): TodoWatchSettings => 
 /**
  * The repository that `#123` references in the linted project point to.
  */
-export const projectRepository = (cwd: string, settings: TodoWatchSettings): Repository | undefined =>
+export const projectRepository = (cwd: string, settings: IssueWatchSettings): Repository | undefined =>
   resolveRepository(cwd, settings.repo);

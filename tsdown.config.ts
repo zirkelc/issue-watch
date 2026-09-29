@@ -16,7 +16,7 @@ export default defineConfig({
   exports: {
     /** The CLI is only a binary, and the worker is loaded by path. */
     exclude: ['cli', 'worker'],
-    bin: { 'todo-watch': './src/cli.ts' },
+    bin: { 'issue-watch': './src/cli.ts' },
   },
   entry: ['src/index.ts', 'src/oxlint.ts', 'src/eslint.ts', 'src/cli.ts', 'src/worker.ts'],
   format: ['esm'],

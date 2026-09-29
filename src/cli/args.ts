@@ -41,7 +41,7 @@ export class UsageError extends Error {
   }
 }
 
-export const HELP = `Usage: todo-watch [options] [paths...]
+export const HELP = `Usage: issue-watch [options] [paths...]
 
 Checks the GitHub issues and pull requests linked in TODO(...) comments.
 Paths default to the current directory. In a git repository, only tracked

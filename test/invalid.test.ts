@@ -43,7 +43,7 @@ tester.run('invalid', createInvalidRule(provider), {
     '// FIXME(zirkelc https://github.com/o)',
     {
       code: '// TODO(#1)',
-      settings: { 'todo-watch': { repo: 'o/r' } },
+      settings: { 'issue-watch': { repo: 'o/r' } },
     },
   ],
   invalid: [
@@ -61,16 +61,16 @@ tester.run('invalid', createInvalidRule(provider), {
     {
       code: '// TODO(zirkelc https://github.com/o)',
       /** Parsing needs no network, so it is reported also with the network off. */
-      settings: { 'todo-watch': { network: 'off' } },
+      settings: { 'issue-watch': { network: 'off' } },
       errors: [{ messageId: 'invalidRef' }],
     },
     {
       code: '// TODO(#12)',
-      settings: { 'todo-watch': { repo: 'not a repo!' } },
+      settings: { 'issue-watch': { repo: 'not a repo!' } },
       errors: [
         {
           message:
-            '"#12" needs the repository of the project, but none was found. Add a GitHub remote named upstream or origin, set "repository" in package.json, or set settings["todo-watch"].repo to "owner/name".',
+            '"#12" needs the repository of the project, but none was found. Add a GitHub remote named upstream or origin, set "repository" in package.json, or set settings["issue-watch"].repo to "owner/name".',
         },
       ],
     },
@@ -124,7 +124,7 @@ tester.run('invalid with failing provider', createInvalidRule(throwingProvider),
   invalid: [
     {
       code: `// TODO(o/r#1)`,
-      settings: { 'todo-watch': { verbose: false } },
+      settings: { 'issue-watch': { verbose: false } },
       errors: [{ message: 'Could not check the status of o/r#1: worker timed out' }],
     },
   ],

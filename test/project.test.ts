@@ -9,7 +9,7 @@ import { detectRepository, parseRepository } from '../src/service/repo.js';
 const REPOSITORY = { owner: 'vitest-dev', repo: 'vitest' };
 
 const gitRepo = () => {
-  const cwd = mkdtempSync(join(tmpdir(), 'todo-watch-git-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'issue-watch-git-'));
   const git = (args: Array<string>, date?: string) =>
     execFileSync('git', args, {
       cwd,
@@ -110,7 +110,7 @@ describe('detectRepository', () => {
 
   test(`should fall back to package.json`, () => {
     // Arrange
-    const cwd = mkdtempSync(join(tmpdir(), 'todo-watch-pkg-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'issue-watch-pkg-'));
     writeFileSync(join(cwd, 'package.json'), JSON.stringify({ repository: { url: 'git+https://github.com/o/r.git' } }));
 
     // Act

@@ -13,7 +13,7 @@ export const recommendedRules = {
   [`${PLUGIN_NAME}/${RuleNames.PULL_REQUEST}`]: DEFAULT_SEVERITIES['pull-request'],
 } as const;
 
-export type TodoWatchPlugin = Plugin & {
+export type IssueWatchPlugin = Plugin & {
   configs: {
     recommended: { plugins: Record<string, Plugin>; rules: typeof recommendedRules };
   };
@@ -22,7 +22,7 @@ export type TodoWatchPlugin = Plugin & {
 /**
  * Creates the plugin with a custom status provider, e.g. to test rules without network access.
  */
-export const createPlugin = (provider: StatusProvider): TodoWatchPlugin => {
+export const createPlugin = (provider: StatusProvider): IssueWatchPlugin => {
   const plugin = definePlugin({
     meta: { name: PLUGIN_NAME },
     rules: {
