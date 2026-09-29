@@ -51,7 +51,7 @@ export const alias = { '@app/utils': './packages/app-utils/src' };
 
 Nothing else is needed. Existing comments in this format are checked as they are.
 
-**Keywords:** by default, only `TODO` is checked. To check other keywords like `FIXME` or `HACK`, set the list with `--keywords` in the CLI or the [`keywords` setting](#lint-settings) of the lint plugin. The list replaces the default, so include `TODO` if you still want it: `--keywords TODO,FIXME,HACK`. Keywords are case-sensitive.
+**Keywords:** by default, only `TODO` is checked. To check other keywords like `FIXME` or `HACK`, set the list with `--keywords` in the CLI or the [`keywords` setting](#settings) of the lint plugin. The list replaces the default, so include `TODO` if you still want it: `--keywords TODO,FIXME,HACK`. Keywords are case-sensitive.
 
 ```ts
 /** Full URL with its path and hash, and it stays clickable in the editor. */
@@ -73,7 +73,7 @@ Nothing else is needed. Existing comments in this format are checked as they are
 
 **Your repository** for `#123` is found in this order: the `repo` setting or the `--repo` option, the git remote `upstream`, the git remote `origin`, and the `repository` field in `package.json`. `upstream` comes first because in a fork, the issues live in the upstream repository.
 
-### Standalone CLI
+## CLI
 
 Run the CLI in your project. It checks all tracked files in the git repository, in any language, including Markdown:
 
@@ -105,9 +105,41 @@ npx todo-watch --format json            # for agents and scripts
 npx todo-watch --format markdown        # for a pull request comment or an issue
 ```
 
-The exit code is `0` without errors, `1` with errors, and `2` for invalid options. Use `--fail-on warn` to also fail on warnings. All options are listed in [CLI Options](#cli-options).
+The exit code is `0` without errors, `1` with errors, and `2` for invalid options. Use `--fail-on warn` to also fail on warnings. All options are listed in [Options](#options).
 
-### Lint Plugin
+### Options
+
+`todo-watch [options] [paths...]` checks the tracked and not ignored files below the paths. Paths default to the current directory. `node_modules` is always skipped.
+
+| Option                   | Default  | Description                                                        |
+| ------------------------ | -------- | ------------------------------------------------------------------ |
+| `--format <format>`      | `text`   | `text`, `json` or `markdown`                                       |
+| `--compact`              | off      | Print only the first line of each message                          |
+| `--quiet`                | off      | Report errors only                                                 |
+| `--fail-on <level>`      | `error`  | Exit with `1` on `error`, on `warn`, or never (`none`)             |
+| `--rules <list>`         | all      | [Rules](#rules) to run                                             |
+| `--ref <owner/repo#123>` | all      | Check only this reference. Can be repeated                         |
+| `--keywords <list>`      | `TODO`   | Comment keywords. Replaces the default, so include `TODO`          |
+| `--repo <owner/name>`    | detected | Repository of `#123` references                                    |
+| `--fix`                  | off      | Update moved references                                            |
+| `--issue-states <list>`  | all      | Issue states to report, see [`issue`](#issue)                      |
+| `--pr-states <list>`     | all      | Pull request states to report, see [`pull-request`](#pull-request) |
+| `--no-linked-prs`        | off      | Do not report open issues with a merged linked pull request        |
+| `--wait-for-release`     | off      | Report a fix only when a release contains it                       |
+| `--cache-ttl <minutes>`  | `60`     | How long fetched statuses stay valid                               |
+| `--no-cache`             | off      | Fetch all statuses again                                           |
+
+The CLI runs the same [rules](#rules) as the lint plugin, and the rule options are CLI options here. The CLI has no config file. Put the options you always use into a script:
+
+```json
+{
+  "scripts": {
+    "todos": "todo-watch --keywords TODO,FIXME,HACK --wait-for-release"
+  }
+}
+```
+
+## Lint
 
 Add the plugin to `.oxlintrc.json` and enable the rules:
 
@@ -135,40 +167,47 @@ The rules show the same messages as the CLI. `oxlint --fix` updates moved refere
 > [!NOTE]
 > Oxlint JS plugins run only on JavaScript and TypeScript files. To also check references in Markdown or other files, use the CLI.
 
-### Using Both
+### Settings
 
-By default, the lint rules fetch statuses from GitHub themselves. The first lint run without a cache then waits a few seconds for GitHub, and so does the editor. To keep linting as fast as without the plugin, let the rules read only the cache, and refresh the cache with the CLI when you want new statuses:
+Settings are shared by all rules and go under `settings["todo-watch"]`:
 
 ```json
 {
-  "jsPlugins": ["todo-watch/oxlint"],
-  "settings": { "todo-watch": { "network": "cache-only" } }
+  "settings": {
+    "todo-watch": {
+      "network": "fetch",
+      "keywords": ["TODO", "FIXME", "HACK"],
+      "cacheTtl": 60,
+      "prefetch": true,
+      "verbose": true,
+      "repo": "vitest-dev/vitest"
+    }
+  }
 }
 ```
 
-```bash
-npx todo-watch   # fetches all references and fills the cache that the lint rules read
-```
+| Setting    | Default    | Description                                                         |
+| ---------- | ---------- | ------------------------------------------------------------------- |
+| `network`  | `fetch`    | `fetch`, `cache-only` or `off`, see [Cache](#cache)                 |
+| `keywords` | `["TODO"]` | Comment keywords. Replaces the default, so include `"TODO"`         |
+| `cacheTtl` | `60`       | How long fetched statuses stay valid, in minutes                    |
+| `prefetch` | `true`     | On the first reference, fetch all references of the project at once |
+| `verbose`  | `true`     | Add the URL and the next step below the first line of a message     |
+| `repo`     | detected   | Repository of `#123` references, as `owner/name`                    |
 
-| `network`         | Lint rules                                                               |
-| ----------------- | ------------------------------------------------------------------------ |
-| `fetch` (default) | Fetch statuses that are not in the cache or older than the cache TTL     |
-| `cache-only`      | Read the cache only. A reference that is not in the cache gets no status |
-| `off`             | No statuses at all. Only references that cannot be parsed are reported   |
+### Rules
 
-## Checks
+The plugin has three rules. The CLI runs the same rules as checks, and `--rules` selects them.
 
-Three checks run in the CLI. In the lint plugin, each check is a rule with the same name.
-
-| Check                           | Needs GitHub | Severity | Reports                                                         |
+| Rule                            | Needs GitHub | Severity | Reports                                                         |
 | ------------------------------- | ------------ | -------- | --------------------------------------------------------------- |
 | [`invalid`](#invalid)           | partly       | `error`  | A reference that cannot be parsed, does not exist, or has moved |
 | [`issue`](#issue)               | yes          | `warn`   | A closed issue, or an open issue with a merged linked fix       |
 | [`pull-request`](#pull-request) | yes          | `warn`   | A merged pull request, or one closed without merge              |
 
-Use `--rules` in the CLI, or turn rules on and off in your lint config, to run only some checks. Each check reports the current state, so a finding stays until you change or remove the comment.
+Each rule reports the current state, so a finding stays until you change or remove the comment.
 
-### `invalid`
+#### `invalid`
 
 Reports references that cannot be checked, references that GitHub cannot find, and references to renamed repos or transferred issues.
 
@@ -180,7 +219,7 @@ Reports references that cannot be checked, references that GitHub cannot find, a
 | ---- | ---------------------------- | ------- | ---------------------------------------------------------------- |
 | none | `reportUnavailable: boolean` | on      | Report once per file if GitHub cannot be reached in the lint run |
 
-### `issue`
+#### `issue`
 
 Reports a closed issue, and an open issue whose linked pull request was merged.
 
@@ -191,7 +230,7 @@ Reports a closed issue, and an open issue whose linked pull request was merged.
 | `duplicate`                  | `closed as a duplicate of <issue> on <date>`, with a suggestion to use the original   |
 | Open with a merged linked PR | `is still open, but the linked pull request <pull request> was merged on <date>, ...` |
 
-**Linked pull requests** are the pull requests that close the issue: linked with a closing keyword like `fixes #123`, or in the Development sidebar of the issue. Usually GitHub closes the issue when such a pull request is merged. The issue stays open when the pull request was merged into a branch other than the default branch, or when the maintainers close issues only after a release. Then this check reports the merged pull request. A linked pull request that is open or closed without merge is not reported, because the issue is still open and you have nothing to do.
+**Linked pull requests** are the pull requests that close the issue: linked with a closing keyword like `fixes #123`, or in the Development sidebar of the issue. Usually GitHub closes the issue when such a pull request is merged. The issue stays open when the pull request was merged into a branch other than the default branch, or when the maintainers close issues only after a release. Then this rule reports the merged pull request. A linked pull request that is open or closed without merge is not reported, because the issue is still open and you have nothing to do.
 
 | CLI                     | Rule option                   | Default                           | Description                                            |
 | ----------------------- | ----------------------------- | --------------------------------- | ------------------------------------------------------ |
@@ -199,7 +238,7 @@ Reports a closed issue, and an open issue whose linked pull request was merged.
 | `--no-linked-prs`       | `linkedPullRequests: boolean` | on                                | Report an open issue with a merged linked pull request |
 | `--wait-for-release`    | `waitForRelease: boolean`     | off                               | Report a fix only when a release contains it           |
 
-### `pull-request`
+#### `pull-request`
 
 Reports a merged pull request, and a pull request that was closed without merge.
 
@@ -224,64 +263,6 @@ In the lint config, options go after the severity. You can give each rule its ow
 }
 ```
 
-## Configuration
-
-### CLI Options
-
-`todo-watch [options] [paths...]` checks the tracked and not ignored files below the paths. Paths default to the current directory. `node_modules` is always skipped.
-
-| Option                   | Default  | Description                                               |
-| ------------------------ | -------- | --------------------------------------------------------- |
-| `--format <format>`      | `text`   | `text`, `json` or `markdown`                              |
-| `--compact`              | off      | Print only the first line of each message                 |
-| `--quiet`                | off      | Report errors only                                        |
-| `--fail-on <level>`      | `error`  | Exit with `1` on `error`, on `warn`, or never (`none`)    |
-| `--rules <list>`         | all      | Checks to run                                             |
-| `--ref <owner/repo#123>` | all      | Check only this reference. Can be repeated                |
-| `--keywords <list>`      | `TODO`   | Comment keywords. Replaces the default, so include `TODO` |
-| `--repo <owner/name>`    | detected | Repository of `#123` references                           |
-| `--fix`                  | off      | Update moved references                                   |
-| `--cache-ttl <minutes>`  | `60`     | How long fetched statuses stay valid                      |
-| `--no-cache`             | off      | Fetch all statuses again                                  |
-
-The check options are listed with each [check](#checks). The CLI has no config file. Put the options you always use into a script:
-
-```json
-{
-  "scripts": {
-    "todos": "todo-watch --keywords TODO,FIXME,HACK --wait-for-release"
-  }
-}
-```
-
-### Lint Settings
-
-Settings are shared by all rules and go under `settings["todo-watch"]`:
-
-```json
-{
-  "settings": {
-    "todo-watch": {
-      "network": "fetch",
-      "keywords": ["TODO", "FIXME", "HACK"],
-      "cacheTtl": 60,
-      "prefetch": true,
-      "verbose": true,
-      "repo": "vitest-dev/vitest"
-    }
-  }
-}
-```
-
-| Setting    | Default    | Description                                                         |
-| ---------- | ---------- | ------------------------------------------------------------------- |
-| `network`  | `fetch`    | `fetch`, `cache-only` or `off`, see [Using Both](#using-both)       |
-| `keywords` | `["TODO"]` | Comment keywords. Replaces the default, so include `"TODO"`         |
-| `cacheTtl` | `60`       | How long fetched statuses stay valid, in minutes                    |
-| `prefetch` | `true`     | On the first reference, fetch all references of the project at once |
-| `verbose`  | `true`     | Add the URL and the next step below the first line of a message     |
-| `repo`     | detected   | Repository of `#123` references, as `owner/name`                    |
-
 ## Advanced
 
 ### Messages for Agents
@@ -294,6 +275,25 @@ Lint and CLI runs are often done by coding agents, so every message has enough c
 ### Cache
 
 Statuses are cached in `node_modules/.cache/todo-watch/github.json`, or in the temp directory if the project has no `node_modules`. The CLI and the lint rules use the same file. "Not found" results are cached too. Network and token errors are not cached. A release that contains a merge commit is cached forever.
+
+**Using the CLI and the lint plugin together:** by default, the lint rules fetch statuses from GitHub themselves. The first lint run without a cache then waits a few seconds for GitHub, and so does the editor. To keep linting as fast as without the plugin, let the rules read only the cache, and refresh the cache with the CLI when you want new statuses:
+
+```json
+{
+  "jsPlugins": ["todo-watch/oxlint"],
+  "settings": { "todo-watch": { "network": "cache-only" } }
+}
+```
+
+```bash
+npx todo-watch   # fetches all references and fills the cache that the lint rules read
+```
+
+| `network`         | Lint rules                                                               |
+| ----------------- | ------------------------------------------------------------------------ |
+| `fetch` (default) | Fetch statuses that are not in the cache or older than the cache TTL     |
+| `cache-only`      | Read the cache only. A reference that is not in the cache gets no status |
+| `off`             | No statuses at all. Only references that cannot be parsed are reported   |
 
 > [!TIP]
 > In CI, cache `node_modules/.cache/todo-watch` between runs. Otherwise every CI run fetches all references once.
