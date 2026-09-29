@@ -1,8 +1,8 @@
-<p align="center">
-  <img src="assets/screenshot.png" alt="Oxlint output with a issue-watch warning for a closed issue and one for a merged pull request" width="800" />
-</p>
+<div align='center'>
 
-<div align="center">
+<picture>
+  <img src="assets/screenshot.png" alt="Oxlint output with a issue-watch warning for a closed issue and one for a merged pull request" width="800" />
+</picture>
 
 <p align="center">Watch GitHub issues and PRs linked in TODO comments</p>
 <p align="center">
@@ -10,6 +10,7 @@
 </p>
 
 </div>
+
 
 This library checks `TODO(...)` comments that link a GitHub issue or pull request, and tells you when the linked issue is closed or the linked pull request is merged. You can use it in two ways:
 
