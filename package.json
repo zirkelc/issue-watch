@@ -1,6 +1,6 @@
 {
   "name": "issue-watch",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Watch GitHub issues and PRs linked in TODO comments",
   "keywords": [
     "cli",
