@@ -11,7 +11,6 @@
 
 </div>
 
-
 This library checks `TODO(...)` comments that link a GitHub issue or pull request, and tells you when the linked issue is closed or the linked pull request is merged. You can use it in two ways:
 
 - **Standalone:** run `npx issue-watch` when you want to know what changed, by hand, in CI, or from a coding agent.
@@ -76,7 +75,7 @@ Nothing else is needed. Existing comments in this format are checked as they are
 
 ## CLI
 
-Run the CLI in your project. It checks all tracked files in the git repository, in any language, including Markdown:
+Run the CLI in your project. It checks the JavaScript and TypeScript files in the git repository, and other files when you ask for them:
 
 ```bash
 npx issue-watch
@@ -101,6 +100,8 @@ The commands you use most:
 ```bash
 npx issue-watch --fix                    # update moved references
 npx issue-watch src docs                 # check only these paths
+npx issue-watch --ext ts,md              # check TypeScript and Markdown files
+npx issue-watch . README.md              # also check this one file
 npx issue-watch --wait-for-release       # report fixes only when they are released
 npx issue-watch --format json            # for agents and scripts
 npx issue-watch --format markdown        # for a pull request comment or an issue
@@ -112,6 +113,8 @@ The exit code is `0` without errors, `1` with errors, and `2` for invalid option
 
 `issue-watch [options] [paths...]` checks the tracked and not ignored files below the paths. Paths default to the current directory. `node_modules` is always skipped.
 
+**Files:** in directories, only files with the `--ext` extensions are checked: `js`, `mjs`, `cjs`, `jsx`, `ts`, `mts`, `cts` and `tsx` by default. The list replaces the default, so include the JavaScript and TypeScript extensions if you still want them: `--ext ts,tsx,md`. A file that you name in the paths is always checked, whatever its extension.
+
 | Option                   | Default  | Description                                                        |
 | ------------------------ | -------- | ------------------------------------------------------------------ |
 | `--format <format>`      | `text`   | `text`, `json` or `markdown`                                       |
@@ -120,6 +123,7 @@ The exit code is `0` without errors, `1` with errors, and `2` for invalid option
 | `--fail-on <level>`      | `error`  | Exit with `1` on `error`, on `warn`, or never (`none`)             |
 | `--rules <list>`         | all      | [Rules](#rules) to run                                             |
 | `--ref <owner/repo#123>` | all      | Check only this reference. Can be repeated                         |
+| `--ext <list>`           | JS, TS   | File extensions to check in directories. Replaces the default      |
 | `--keywords <list>`      | `TODO`   | Comment keywords. Replaces the default, so include `TODO`          |
 | `--repo <owner/name>`    | detected | Repository of `#123` references                                    |
 | `--fix`                  | off      | Update moved references                                            |
@@ -166,7 +170,7 @@ export default [issueWatch.configs.recommended];
 The rules show the same messages as the CLI. `oxlint --fix` updates moved references.
 
 > [!NOTE]
-> Oxlint JS plugins run only on JavaScript and TypeScript files. To also check references in Markdown or other files, use the CLI.
+> Oxlint JS plugins run only on JavaScript and TypeScript files. To also check references in Markdown or other files, use the CLI with `--ext` or with the file names.
 
 ### Settings
 
@@ -312,7 +316,7 @@ For a merged pull request, the 50 newest tags of the repo are loaded. The compar
 >
 > - Only GitHub.com is supported. GitHub Enterprise, GitLab, and Jira references are ignored.
 > - Only the first 10 linked pull requests of an issue are checked.
-> - The lint plugin checks only JavaScript and TypeScript files. The CLI checks all text files.
+> - The lint plugin checks only JavaScript and TypeScript files. The CLI checks the same files by default, and other text files with `--ext` or by name.
 > - The CLI finds keywords in any text, not only in comments. A `TODO(owner/repo#123)` in a string is checked too.
 
 ## License

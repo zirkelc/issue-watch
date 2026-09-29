@@ -1,10 +1,24 @@
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { extname, join, relative, sep } from 'node:path';
 
 const MAX_FILE_SIZE = 1_000_000;
 const BINARY_SAMPLE_LENGTH = 8_000;
 const SKIPPED_DIRECTORIES = new Set(['node_modules', '.git']);
+
+/**
+ * File extensions that are checked in directories when no other extensions are configured:
+ * JavaScript and TypeScript, the files that the lint plugin checks too.
+ */
+export const DEFAULT_EXTENSIONS: Array<string> = ['js', 'mjs', 'cjs', 'jsx', 'ts', 'mts', 'cts', 'tsx'];
+
+/**
+ * Normalizes an extension from the options, e.g. `.MD` to `md`.
+ */
+export const normalizeExtension = (extension: string) => extension.replace(/^\./, '').toLowerCase();
+
+const hasExtension = (path: string, extensions: ReadonlySet<string>) =>
+  extensions.has(normalizeExtension(extname(path)));
 
 export type SourceFile = {
   /** Path relative to the working directory, with forward slashes. */
@@ -59,12 +73,32 @@ const walkFiles = (cwd: string, paths: Array<string>): Array<string> => {
   return files;
 };
 
+const isFile = (path: string) => {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Lists the files below the given paths: the tracked and not ignored files in a git repository,
- * else all files except hidden directories and `node_modules`.
+ * else all files except hidden directories and `node_modules`. Files in directories are listed
+ * only with one of the extensions, if extensions are given. A path that names a file is always
+ * listed, so any file can be checked when it is named explicitly.
  */
-export const listFiles = (cwd: string, paths: Array<string> = ['.']): Array<string> =>
-  [...new Set(gitFiles(cwd, paths) ?? walkFiles(cwd, paths))].filter((path) => !isSkipped(path)).sort();
+export const listFiles = (cwd: string, paths: Array<string> = ['.'], extensions?: Array<string>): Array<string> => {
+  const explicit = paths
+    .filter((path) => isFile(join(cwd, path)))
+    .map((path) => toPosix(relative(cwd, join(cwd, path))));
+  const directories = paths.filter((path) => !isFile(join(cwd, path)));
+  const allowed = extensions ? new Set(extensions.map(normalizeExtension)) : undefined;
+
+  const found = directories.length === 0 ? [] : (gitFiles(cwd, directories) ?? walkFiles(cwd, directories));
+  const filtered = found.filter((path) => !isSkipped(path) && (!allowed || hasExtension(path, allowed)));
+
+  return [...new Set([...explicit, ...filtered])].sort();
+};
 
 /**
  * Git lists untracked files in `node_modules` if the project has no `.gitignore`, so skipped

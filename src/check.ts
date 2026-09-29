@@ -4,7 +4,7 @@ import { DEFAULT_PULL_REQUEST_OPTIONS, evaluatePullRequest, type PullRequestOpti
 import { ALL_RULES, RuleNames, Tools, type Finding, type RuleName, type Tool } from './evaluate/types.js';
 import { toRefKey, type RefId, type RefKey } from './github/types.js';
 import { DEFAULT_KEYWORDS, parseTodos, type TodoEntry } from './parse.js';
-import { listFiles, readSourceFile } from './service/files.js';
+import { DEFAULT_EXTENSIONS, listFiles, readSourceFile } from './service/files.js';
 import { createStatusHandler, type StatusRequest, type StatusResponse } from './service/handler.js';
 import { resolveRepository } from './service/repo.js';
 
@@ -15,6 +15,11 @@ export type CheckOptions = {
   cwd?: string;
   /** Files or directories to check. Defaults to the whole directory. */
   paths?: Array<string>;
+  /**
+   * File extensions to check in directories. Defaults to JavaScript and TypeScript. Files that
+   * are named in `paths` are always checked.
+   */
+  extensions?: Array<string>;
   /** Rules to run. Defaults to all rules. */
   rules?: Array<RuleName>;
   /** Check only these references. */
@@ -48,8 +53,9 @@ export type CheckResult = {
 let defaultHandler: ReturnType<typeof createStatusHandler> | undefined;
 
 /**
- * Checks all TODO references in the given paths, with the same checks as the lint rules. Unlike
- * the lint rules, it reads any text file, not only JavaScript and TypeScript.
+ * Checks all TODO references in the given paths, with the same checks as the lint rules. It
+ * checks JavaScript and TypeScript files by default, but unlike the lint rules it can read any
+ * text file: with other extensions, or when the file is named in the paths.
  */
 export const check = async (options: CheckOptions = {}): Promise<CheckResult> => {
   const cwd = options.cwd ?? process.cwd();
@@ -63,7 +69,7 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
   const pullRequestOptions: PullRequestOptions = { ...DEFAULT_PULL_REQUEST_OPTIONS, ...options.pullRequest };
 
   const files: Array<{ path: string; text: string; entries: Array<TodoEntry> }> = [];
-  for (const path of listFiles(cwd, options.paths)) {
+  for (const path of listFiles(cwd, options.paths, options.extensions ?? DEFAULT_EXTENSIONS)) {
     const file = readSourceFile(cwd, path);
     if (!file) continue;
 

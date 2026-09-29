@@ -4,6 +4,7 @@ import { REPORTED_PULL_REQUEST_STATES, type ReportedPullRequestState } from '../
 import { ALL_RULES, Severities, type RuleName, type Severity } from '../evaluate/types.js';
 import type { RefId } from '../github/types.js';
 import { DEFAULT_KEYWORDS, parseRef } from '../parse.js';
+import { DEFAULT_EXTENSIONS } from '../service/files.js';
 import { parseRepository } from '../service/repo.js';
 import { OutputFormats, type OutputFormat } from './report.js';
 
@@ -16,6 +17,7 @@ export type FailLevel = (typeof FailLevels)[keyof typeof FailLevels];
 
 export type CliOptions = {
   paths: Array<string>;
+  extensions: Array<string>;
   format: OutputFormat;
   rules: Array<RuleName>;
   failOn: FailLevel;
@@ -45,7 +47,8 @@ export const HELP = `Usage: issue-watch [options] [paths...]
 
 Checks the GitHub issues and pull requests linked in TODO(...) comments.
 Paths default to the current directory. In a git repository, only tracked
-and not ignored files are checked.
+and not ignored files are checked. In directories, only files with the
+--ext extensions are checked. Files that you name are always checked.
 
 Output:
   --format <format>          text, json or markdown (default: text)
@@ -56,6 +59,8 @@ Output:
 Selection:
   --rules <list>             Rules to run (default: ${ALL_RULES.join(',')})
   --ref <owner/repo#123>     Check only this reference. Can be repeated
+  --ext <list>               File extensions to check in directories
+                             (default: ${DEFAULT_EXTENSIONS.join(',')})
   --keywords <list>          Comment keywords (default: ${DEFAULT_KEYWORDS.join(',')})
   --repo <owner/name>        Repository of #123 references (default: git remote
                              upstream, then origin, then package.json)
@@ -104,6 +109,7 @@ export const parseCliArgs = (argv: Array<string>): CliOptions => {
         'fail-on': { type: 'string', default: FailLevels.ERROR },
         ref: { type: 'string', multiple: true },
         fix: { type: 'boolean', default: false },
+        ext: { type: 'string' },
         keywords: { type: 'string' },
         repo: { type: 'string' },
         'issue-states': { type: 'string' },
@@ -145,6 +151,7 @@ export const parseCliArgs = (argv: Array<string>): CliOptions => {
 
   return {
     paths: positionals.length > 0 ? positionals : ['.'],
+    extensions: list(values.ext) ?? DEFAULT_EXTENSIONS,
     format: oneOf('format', values.format, Object.values(OutputFormats)),
     rules: (list(values.rules) ?? ALL_RULES).map((rule) => oneOf('rules', rule, ALL_RULES)),
     failOn: oneOf('fail-on', values['fail-on'], Object.values(FailLevels)),

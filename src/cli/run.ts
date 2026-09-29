@@ -17,6 +17,7 @@ export type RunDeps = {
 const toCheckOptions = (options: CliOptions, deps: RunDeps): CheckOptions => ({
   cwd: deps.cwd,
   paths: options.paths,
+  extensions: options.extensions,
   rules: options.rules,
   refs: options.refs,
   keywords: options.keywords,

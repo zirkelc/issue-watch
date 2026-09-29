@@ -75,10 +75,11 @@ describe('applyEdits', () => {
 });
 
 describe('check', () => {
-  test(`should check any text file and report per file`, async () => {
+  test(`should check only JavaScript and TypeScript files in directories by default`, async () => {
     // Arrange
     const cwd = project({
       'src/a.ts': `// TODO(o/r#2)\nexport const a = 1;\n`,
+      'src/b.mjs': `// TODO(o/r#1)\n`,
       'docs/notes.md': `Waiting for TODO(o/r#1).\n`,
       'scripts/run.py': `# TODO(https://github.com/o/r/issue/3)\n`,
       'node_modules/dep/index.js': `// TODO(o/r#2)\n`,
@@ -90,10 +91,39 @@ describe('check', () => {
     // Assert
     expect(result.refCount).toBe(2);
     expect(result.files.map((file) => [file.path, file.findings.map((finding) => finding.messageId)])).toEqual([
-      ['docs/notes.md', ['linkedMerged']],
-      ['scripts/run.py', ['invalidRef']],
       ['src/a.ts', ['merged']],
+      ['src/b.mjs', ['linkedMerged']],
     ]);
+  });
+
+  test(`should check other extensions only when they are configured`, async () => {
+    // Arrange
+    const cwd = project({
+      'src/a.ts': `// TODO(o/r#2)\n`,
+      'docs/notes.md': `Waiting for TODO(o/r#1).\n`,
+      'scripts/run.py': `# TODO(https://github.com/o/r/issue/3)\n`,
+    });
+
+    // Act
+    const result = await check({ cwd, getStatuses, extensions: ['.MD', 'py'] });
+
+    // Assert
+    expect(result.files.map((file) => file.path)).toEqual(['docs/notes.md', 'scripts/run.py']);
+  });
+
+  test(`should always check files that are named in the paths`, async () => {
+    // Arrange
+    const cwd = project({
+      'src/a.ts': `// TODO(o/r#2)\n`,
+      'docs/notes.md': `Waiting for TODO(o/r#1).\n`,
+      'docs/other.md': `Waiting for TODO(o/r#1).\n`,
+    });
+
+    // Act
+    const result = await check({ cwd, getStatuses, paths: ['src', 'docs/notes.md'] });
+
+    // Assert
+    expect(result.files.map((file) => file.path)).toEqual(['docs/notes.md', 'src/a.ts']);
   });
 
   test(`should check only the given references and rules`, async () => {
@@ -357,6 +387,20 @@ describe('check in a git repository', () => {
 
     // Assert
     expect(result.files.map((file) => file.path)).toEqual(['a.ts']);
+  });
+});
+
+describe('run with extensions', () => {
+  test(`should check the extensions from --ext`, async () => {
+    // Arrange
+    const cwd = project({ 'a.ts': '// TODO(o/r#2)\n', 'notes.md': 'TODO(o/r#2)\n' });
+
+    // Act
+    const { stdout } = await runCli(['--ext', 'md', '--compact'], cwd);
+
+    // Assert
+    expect(stdout.split('\n')[0]?.startsWith('notes.md:1:6  warning  pull-request')).toBe(true);
+    expect(stdout).not.toContain('a.ts');
   });
 });
 
