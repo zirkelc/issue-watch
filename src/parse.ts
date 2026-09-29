@@ -109,13 +109,6 @@ export const formatShortRef = (ref: Pick<TodoRef, 'owner' | 'repo' | 'number'>, 
     ? `#${ref.number}`
     : `${ref.owner}/${ref.repo}#${ref.number}`;
 
-/**
- * Builds the canonical URL of a reference. GitHub redirects `/issues/N` to `/pull/N` for pull
- * requests, so the type of the target does not need to be known.
- */
-export const toRefUrl = (ref: Pick<TodoRef, 'owner' | 'repo' | 'number'>): string =>
-  `https://github.com/${ref.owner}/${ref.repo}/issues/${ref.number}`;
-
 const tokenize = (text: string, offset: number): Array<Token> =>
   Array.from(text.matchAll(/\S+/g), (match) => ({
     text: match[0],

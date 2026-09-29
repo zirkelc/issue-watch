@@ -49,7 +49,9 @@ Put a GitHub reference in the parentheses of a `TODO` comment. The reference is 
 export const alias = { '@app/utils': './packages/app-utils/src' };
 ```
 
-Nothing else is needed. Existing comments in this format are checked as they are. To also check other keywords like `FIXME` or `HACK`, use `--keywords` in the CLI or the `keywords` setting.
+Nothing else is needed. Existing comments in this format are checked as they are.
+
+**Keywords:** by default, only `TODO` is checked. To check other keywords like `FIXME` or `HACK`, set the list with `--keywords` in the CLI or the [`keywords` setting](#lint-settings) of the lint plugin. The list replaces the default, so include `TODO` if you still want it: `--keywords TODO,FIXME,HACK`. Keywords are case-sensitive.
 
 ```ts
 /** Full URL with its path and hash, and it stays clickable in the editor. */
@@ -120,7 +122,7 @@ Add the plugin to `.oxlintrc.json` and enable the rules:
 }
 ```
 
-For ESLint 9, use the recommended config, which enables the same four rules:
+For ESLint 9, use the recommended config, which enables the same three rules:
 
 ```js
 import todoWatch from 'todo-watch/eslint';
@@ -152,32 +154,27 @@ npx todo-watch   # fetches all references and fills the cache that the lint rule
 | ----------------- | ------------------------------------------------------------------------ |
 | `fetch` (default) | Fetch statuses that are not in the cache or older than the cache TTL     |
 | `cache-only`      | Read the cache only. A reference that is not in the cache gets no status |
-| `off`             | No statuses at all. Only `format` reports                                |
+| `off`             | No statuses at all. Only references that cannot be parsed are reported   |
 
 ## Checks
 
-Four checks run in the CLI. In the lint plugin, each check is a rule with the same name.
+Three checks run in the CLI. In the lint plugin, each check is a rule with the same name.
 
-| Check                           | Needs GitHub | Severity | Reports                                                   |
-| ------------------------------- | ------------ | -------- | --------------------------------------------------------- |
-| [`format`](#format)             | no           | `error`  | A reference that cannot be parsed                         |
-| [`invalid`](#invalid)           | yes          | `error`  | A reference that does not exist or has moved              |
-| [`issue`](#issue)               | yes          | `warn`   | A closed issue, or an open issue with a merged linked fix |
-| [`pull-request`](#pull-request) | yes          | `warn`   | A merged pull request, or one closed without merge        |
+| Check                           | Needs GitHub | Severity | Reports                                                         |
+| ------------------------------- | ------------ | -------- | --------------------------------------------------------------- |
+| [`invalid`](#invalid)           | partly       | `error`  | A reference that cannot be parsed, does not exist, or has moved |
+| [`issue`](#issue)               | yes          | `warn`   | A closed issue, or an open issue with a merged linked fix       |
+| [`pull-request`](#pull-request) | yes          | `warn`   | A merged pull request, or one closed without merge              |
 
 Use `--rules` in the CLI, or turn rules on and off in your lint config, to run only some checks. Each check reports the current state, so a finding stays until you change or remove the comment.
 
-### `format`
-
-Checks the syntax without network access. It reports text in the parentheses that is not a reference, and `#123` if your repository cannot be found.
-
-| CLI                   | Rule option                | Default | Description                                                                            |
-| --------------------- | -------------------------- | ------- | -------------------------------------------------------------------------------------- |
-| `--expand-short-refs` | `expandShortRefs: boolean` | off     | Report `owner/repo#123` and `#123`. `--fix` replaces them with the full, clickable URL |
-
 ### `invalid`
 
-Reports references that GitHub cannot find, and references to renamed repos or transferred issues. `--fix` updates a moved reference and keeps the path and hash of a URL. If GitHub cannot be reached or no token is found, it reports this once, with the next step to fix it.
+Reports references that cannot be checked, references that GitHub cannot find, and references to renamed repos or transferred issues.
+
+**Cannot be checked** means a link to github.com that is not an issue or pull request, like a typo in `/issue/123`, or `#123` when your repository cannot be found. Without this report, such a TODO would be skipped without a message. This part needs no network access. Other text in the parentheses is allowed, and a TODO without any GitHub link, like `TODO(zirkelc)`, is ignored.
+
+`--fix` updates a moved reference and keeps the path and hash of a URL. If GitHub cannot be reached or no token is found, it reports this once, with the next step to fix it.
 
 | CLI  | Rule option                  | Default | Description                                                      |
 | ---- | ---------------------------- | ------- | ---------------------------------------------------------------- |
@@ -233,19 +230,19 @@ In the lint config, options go after the severity. You can give each rule its ow
 
 `todo-watch [options] [paths...]` checks the tracked and not ignored files below the paths. Paths default to the current directory. `node_modules` is always skipped.
 
-| Option                   | Default      | Description                                                        |
-| ------------------------ | ------------ | ------------------------------------------------------------------ |
-| `--format <format>`      | `text`       | `text`, `json` or `markdown`                                       |
-| `--compact`              | off          | Print only the first line of each message                          |
-| `--quiet`                | off          | Report errors only                                                 |
-| `--fail-on <level>`      | `error`      | Exit with `1` on `error`, on `warn`, or never (`none`)             |
-| `--rules <list>`         | all          | Checks to run                                                      |
-| `--ref <owner/repo#123>` | all          | Check only this reference. Can be repeated                         |
-| `--keywords <list>`      | `TODO`       | Comment keywords                                                   |
-| `--repo <owner/name>`    | detected     | Repository of `#123` references                                    |
-| `--fix`                  | off          | Update moved references, and short ones with `--expand-short-refs` |
-| `--cache-ttl <minutes>`  | `60`         | How long fetched statuses stay valid                               |
-| `--no-cache`             | off          | Fetch all statuses again                                           |
+| Option                   | Default  | Description                                               |
+| ------------------------ | -------- | --------------------------------------------------------- |
+| `--format <format>`      | `text`   | `text`, `json` or `markdown`                              |
+| `--compact`              | off      | Print only the first line of each message                 |
+| `--quiet`                | off      | Report errors only                                        |
+| `--fail-on <level>`      | `error`  | Exit with `1` on `error`, on `warn`, or never (`none`)    |
+| `--rules <list>`         | all      | Checks to run                                             |
+| `--ref <owner/repo#123>` | all      | Check only this reference. Can be repeated                |
+| `--keywords <list>`      | `TODO`   | Comment keywords. Replaces the default, so include `TODO` |
+| `--repo <owner/name>`    | detected | Repository of `#123` references                           |
+| `--fix`                  | off      | Update moved references                                   |
+| `--cache-ttl <minutes>`  | `60`     | How long fetched statuses stay valid                      |
+| `--no-cache`             | off      | Fetch all statuses again                                  |
 
 The check options are listed with each [check](#checks). The CLI has no config file. Put the options you always use into a script:
 
@@ -266,7 +263,7 @@ Settings are shared by all rules and go under `settings["todo-watch"]`:
   "settings": {
     "todo-watch": {
       "network": "fetch",
-      "keywords": ["TODO", "FIXME"],
+      "keywords": ["TODO", "FIXME", "HACK"],
       "cacheTtl": 60,
       "prefetch": true,
       "verbose": true,
@@ -276,14 +273,14 @@ Settings are shared by all rules and go under `settings["todo-watch"]`:
 }
 ```
 
-| Setting    | Default             | Description                                                         |
-| ---------- | ------------------- | ------------------------------------------------------------------- |
-| `network`  | `fetch`             | `fetch`, `cache-only` or `off`, see [Using Both](#using-both)       |
-| `keywords` | `["TODO"]`          | Comment keywords                                                    |
-| `cacheTtl` | `60`                | How long fetched statuses stay valid, in minutes                    |
-| `prefetch` | `true`              | On the first reference, fetch all references of the project at once |
-| `verbose`  | `true`              | Add the URL and the next step below the first line of a message     |
-| `repo`     | detected            | Repository of `#123` references, as `owner/name`                    |
+| Setting    | Default    | Description                                                         |
+| ---------- | ---------- | ------------------------------------------------------------------- |
+| `network`  | `fetch`    | `fetch`, `cache-only` or `off`, see [Using Both](#using-both)       |
+| `keywords` | `["TODO"]` | Comment keywords. Replaces the default, so include `"TODO"`         |
+| `cacheTtl` | `60`       | How long fetched statuses stay valid, in minutes                    |
+| `prefetch` | `true`     | On the first reference, fetch all references of the project at once |
+| `verbose`  | `true`     | Add the URL and the next step below the first line of a message     |
+| `repo`     | detected   | Repository of `#123` references, as `owner/name`                    |
 
 ## Advanced
 

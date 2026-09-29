@@ -1,7 +1,6 @@
 import type { Token, TodoRef } from '../parse.js';
 
 export const RuleNames = {
-  FORMAT: 'format',
   INVALID: 'invalid',
   ISSUE: 'issue',
   PULL_REQUEST: 'pull-request',
@@ -22,7 +21,6 @@ export type Severity = (typeof Severities)[keyof typeof Severities];
  * Severity of each rule in the recommended config and in the CLI.
  */
 export const DEFAULT_SEVERITIES: Record<RuleName, Severity> = {
-  format: Severities.ERROR,
   invalid: Severities.ERROR,
   issue: Severities.WARN,
   'pull-request': Severities.WARN,

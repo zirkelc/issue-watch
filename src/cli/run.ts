@@ -6,12 +6,6 @@ import { HELP, parseCliArgs, shouldFail, UsageError, type CliOptions } from './a
 import { applyEdits } from './edits.js';
 import { formatReport, toProblems } from './report.js';
 
-/**
- * Fixes can overlap, like a moved reference that is also a short reference. The second one is
- * applied in the next pass.
- */
-const MAX_FIX_PASSES = 10;
-
 export type RunDeps = {
   cwd: string;
   version: string;
@@ -28,7 +22,6 @@ const toCheckOptions = (options: CliOptions, deps: RunDeps): CheckOptions => ({
   keywords: options.keywords,
   repo: options.repo,
   cacheTtl: options.cacheTtl,
-  format: { expandShortRefs: options.expandShortRefs },
   issue: {
     states: options.issueStates,
     linkedPullRequests: options.linkedPullRequests,
@@ -86,14 +79,9 @@ export const run = async (argv: Array<string>, deps: RunDeps): Promise<number> =
   let result = await check(checkOptions);
 
   if (options.fix) {
-    let total = 0;
-    for (let pass = 0; pass < MAX_FIX_PASSES; pass++) {
-      const applied = applyFixes(result, deps);
-      if (applied === 0) break;
-      total += applied;
-      result = await check(checkOptions);
-    }
-    deps.stderr(`Applied ${total} change${total === 1 ? '' : 's'}.\n`);
+    const applied = applyFixes(result, deps);
+    if (applied > 0) result = await check(checkOptions);
+    deps.stderr(`Applied ${applied} change${applied === 1 ? '' : 's'}.\n`);
   }
 
   let problems = toProblems(result);

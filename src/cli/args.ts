@@ -27,7 +27,6 @@ export type CliOptions = {
   pullRequestStates: Array<ReportedPullRequestState>;
   linkedPullRequests: boolean;
   waitForRelease: boolean;
-  expandShortRefs: boolean;
   cacheTtl: number;
   quiet: boolean;
   compact: boolean;
@@ -62,15 +61,13 @@ Selection:
                              upstream, then origin, then package.json)
 
 Changes:
-  --fix                      Update moved references, and short references
-                             with --expand-short-refs
+  --fix                      Update moved references
 
 Checks:
   --issue-states <list>      Issue states to report (default: ${REPORTED_ISSUE_STATES.join(',')})
   --pr-states <list>         Pull request states to report (default: ${REPORTED_PULL_REQUEST_STATES.join(',')})
   --no-linked-prs            Do not report open issues with a merged linked pull request
   --wait-for-release         Report a fix only when a release contains it
-  --expand-short-refs        Report short references; --fix replaces them with URLs
 
 Cache:
   --cache-ttl <minutes>      How long fetched statuses stay valid (default: 60)
@@ -113,7 +110,6 @@ export const parseCliArgs = (argv: Array<string>): CliOptions => {
         'pr-states': { type: 'string' },
         'no-linked-prs': { type: 'boolean', default: false },
         'wait-for-release': { type: 'boolean', default: false },
-        'expand-short-refs': { type: 'boolean', default: false },
         'cache-ttl': { type: 'string' },
         'no-cache': { type: 'boolean', default: false },
         quiet: { type: 'boolean', default: false },
@@ -164,7 +160,6 @@ export const parseCliArgs = (argv: Array<string>): CliOptions => {
     ),
     linkedPullRequests: !values['no-linked-prs'],
     waitForRelease: values['wait-for-release'],
-    expandShortRefs: values['expand-short-refs'],
     cacheTtl,
     quiet: values.quiet,
     compact: values.compact,

@@ -11,7 +11,7 @@ export const NetworkModes = {
   FETCH: 'fetch',
   /** Read the cache only. The CLI fills it. */
   CACHE_ONLY: 'cache-only',
-  /** No network rules. Only the format rule reports. */
+  /** No statuses. Only references that cannot be parsed are reported. */
   OFF: 'off',
 } as const;
 

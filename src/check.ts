@@ -1,5 +1,4 @@
-import { evaluateFormat, type FormatOptions } from './evaluate/format.js';
-import { evaluateInvalid, UNAVAILABLE_MESSAGE_ID } from './evaluate/invalid.js';
+import { evaluateInvalid, evaluateUnparsed, UNAVAILABLE_MESSAGE_ID } from './evaluate/invalid.js';
 import { DEFAULT_ISSUE_OPTIONS, evaluateIssue, type IssueOptions } from './evaluate/issue.js';
 import { DEFAULT_PULL_REQUEST_OPTIONS, evaluatePullRequest, type PullRequestOptions } from './evaluate/pull-request.js';
 import { ALL_RULES, RuleNames, Tools, type Finding, type RuleName, type Tool } from './evaluate/types.js';
@@ -25,7 +24,6 @@ export type CheckOptions = {
   repo?: string;
   /** How long a fetched status stays valid, in minutes. `0` always fetches. */
   cacheTtl?: number;
-  format?: Partial<FormatOptions>;
   issue?: Partial<IssueOptions>;
   pullRequest?: Partial<PullRequestOptions>;
   /** The tool whose commands the next steps name. Defaults to the CLI. */
@@ -61,7 +59,6 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
   const only = options.refs ? new Set(options.refs.map(toRefKey)) : undefined;
   const repository = resolveRepository(cwd, options.repo);
 
-  const formatOptions: FormatOptions = { expandShortRefs: false, ...options.format };
   const issueOptions: IssueOptions = { ...DEFAULT_ISSUE_OPTIONS, ...options.issue };
   const pullRequestOptions: PullRequestOptions = { ...DEFAULT_PULL_REQUEST_OPTIONS, ...options.pullRequest };
 
@@ -83,9 +80,8 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
     }
   }
 
-  const needsNetwork = [...rules].some((rule) => rule !== RuleNames.FORMAT);
   let statuses: StatusResponse = {};
-  if (needsNetwork && refs.size > 0) {
+  if (rules.size > 0 && refs.size > 0) {
     const getStatuses = options.getStatuses ?? (defaultHandler ??= createStatusHandler());
     statuses = await getStatuses({
       refs: [...refs.values()],
@@ -104,7 +100,7 @@ export const check = async (options: CheckOptions = {}): Promise<CheckResult> =>
     const findings: Array<Finding> = [];
 
     for (const entry of entries) {
-      if (rules.has(RuleNames.FORMAT)) findings.push(...evaluateFormat(entry, formatOptions, tool));
+      if (rules.has(RuleNames.INVALID)) findings.push(...evaluateUnparsed(entry, tool));
 
       const { ref } = entry;
       const result = ref ? statuses[toRefKey(ref)] : undefined;

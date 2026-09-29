@@ -33,8 +33,47 @@ tester.run('invalid', createInvalidRule(provider), {
       code: `// TODO(x/y#1)`,
       options: [{ reportUnavailable: false }],
     },
+    /** Text after the reference is allowed, also inside the parentheses. */
+    '// TODO(o/r#1 please): use the new option',
+    '/*\n * TODO(\n *   o/r#1\n * )\n */',
+    '// TODO: plain todo',
+    '// TODO(zirkelc): not a reference',
+    '// see https://github.com/o/r/issues/1',
+    /** FIXME is not a keyword by default. */
+    '// FIXME(zirkelc https://github.com/o)',
+    {
+      code: '// TODO(#1)',
+      settings: { 'todo-watch': { repo: 'o/r' } },
+    },
   ],
   invalid: [
+    {
+      code: '// TODO(https://github.com/o/r/issue/1): use the new option',
+      errors: [
+        {
+          message:
+            '"https://github.com/o/r/issue/1" is not a GitHub issue or pull request reference. Use a URL like https://github.com/owner/repo/issues/123, the short form owner/repo#123, or #123 in the repository of the project.',
+          column: 8,
+          endColumn: 38,
+        },
+      ],
+    },
+    {
+      code: '// TODO(zirkelc https://github.com/o)',
+      /** Parsing needs no network, so it is reported also with the network off. */
+      settings: { 'todo-watch': { network: 'off' } },
+      errors: [{ messageId: 'invalidRef' }],
+    },
+    {
+      code: '// TODO(#12)',
+      settings: { 'todo-watch': { repo: 'not a repo!' } },
+      errors: [
+        {
+          message:
+            '"#12" needs the repository of the project, but none was found. Add a GitHub remote named upstream or origin, set "repository" in package.json, or set settings["todo-watch"].repo to "owner/name".',
+        },
+      ],
+    },
     {
       code: `// TODO(o/r#404)`,
       errors: [

@@ -1,7 +1,7 @@
 import { FailureReasons, formatRef, toRefKey, type StatusResult } from '../github/types.js';
-import { formatShortRef, RefKinds, type TodoRef } from '../parse.js';
+import { formatShortRef, RefKinds, type TodoEntry, type TodoRef } from '../parse.js';
 import { describeTarget, fixCommand } from './messages.js';
-import { editOf, RuleNames, type Finding, type RefTarget, type Tool } from './types.js';
+import { editOf, RuleNames, Tools, type Finding, type RefTarget, type Tool } from './types.js';
 
 export type InvalidOptions = {
   /** Report once per file if GitHub cannot be reached or no token is available. */
@@ -9,6 +9,43 @@ export type InvalidOptions = {
 };
 
 export const UNAVAILABLE_MESSAGE_ID = 'unavailable';
+
+const repoSetting = (tool: Tool) =>
+  tool === Tools.CLI ? 'run todo-watch with --repo owner/name' : 'set settings["todo-watch"].repo to "owner/name"';
+
+/**
+ * Reports a TODO entry that looks like a GitHub reference but cannot be checked: a URL that is
+ * not an issue or pull request, or `#123` without a known repository. Without this, such a TODO
+ * would be skipped without a message. Other entries like `TODO(username)` follow a different
+ * convention and are ignored. This needs no network access.
+ */
+export const evaluateUnparsed = (entry: TodoEntry, tool: Tool): Array<Finding> => {
+  if (entry.ref) return [];
+
+  const base: Pick<Finding, 'rule' | 'details' | 'ref'> = { rule: RuleNames.INVALID, details: [], ref: undefined };
+  if (entry.unresolved) {
+    return [
+      {
+        ...base,
+        messageId: 'missingRepo',
+        token: entry.unresolved,
+        summary: `"${entry.unresolved.text}" needs the repository of the project, but none was found. Add a GitHub remote named upstream or origin, set "repository" in package.json, or ${repoSetting(tool)}.`,
+      },
+    ];
+  }
+
+  const token = entry.unknown.find((unknown) => unknown.text.includes('github.com'));
+  if (!token) return [];
+
+  return [
+    {
+      ...base,
+      messageId: 'invalidRef',
+      token,
+      summary: `"${token.text}" is not a GitHub issue or pull request reference. Use a URL like https://github.com/owner/repo/issues/123, the short form owner/repo#123, or #123 in the repository of the project.`,
+    },
+  ];
+};
 
 const URL_PREFIX_RE = /^https?:\/\/(?:www\.)?github\.com\/[^/]+\/[^/]+\/(?:issues|pull)\/\d+/;
 

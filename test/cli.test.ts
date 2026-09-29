@@ -80,7 +80,7 @@ describe('check', () => {
     const cwd = project({
       'src/a.ts': `// TODO(o/r#2)\nexport const a = 1;\n`,
       'docs/notes.md': `Waiting for TODO(o/r#1).\n`,
-      'scripts/run.py': `# TODO(o/r#3 please)\n`,
+      'scripts/run.py': `# TODO(https://github.com/o/r/issue/3)\n`,
       'node_modules/dep/index.js': `// TODO(o/r#2)\n`,
     });
 
@@ -88,10 +88,10 @@ describe('check', () => {
     const result = await check({ cwd, getStatuses });
 
     // Assert
-    expect(result.refCount).toBe(3);
+    expect(result.refCount).toBe(2);
     expect(result.files.map((file) => [file.path, file.findings.map((finding) => finding.messageId)])).toEqual([
       ['docs/notes.md', ['linkedMerged']],
-      ['scripts/run.py', ['unexpectedText']],
+      ['scripts/run.py', ['invalidRef']],
       ['src/a.ts', ['merged']],
     ]);
   });
@@ -177,7 +177,7 @@ describe('run', () => {
 
   test.each([
     [['--fail-on', 'warn'], 1],
-    [['--fail-on', 'none', '--rules', 'format'], 0],
+    [['--fail-on', 'none', '--rules', 'issue'], 0],
     [['--fail-on', 'error'], 0],
   ])(`should use fail level %j`, async (argv, expected) => {
     // Arrange
@@ -256,16 +256,18 @@ describe('run', () => {
 
   test(`should fix files`, async () => {
     // Arrange
-    const cwd = project({ 'a.ts': '// TODO(old/name#3): use the new option\n// TODO(o/r#3)\n' });
+    const cwd = project({
+      'a.ts': '// TODO(old/name#3): use the new option\n// TODO(https://github.com/old/name/issues/3#issuecomment-1)\n',
+    });
 
     // Act
-    const { code, stderr } = await runCli(['--fix', '--expand-short-refs'], cwd);
+    const { code, stderr } = await runCli(['--fix'], cwd);
 
     // Assert
     expect(code).toBe(0);
-    expect(stderr).toBe('Applied 3 changes.\n');
+    expect(stderr).toBe('Applied 2 changes.\n');
     expect(readFileSync(join(cwd, 'a.ts'), 'utf8')).toBe(
-      '// TODO(https://github.com/o/r/issues/3): use the new option\n// TODO(https://github.com/o/r/issues/3)\n',
+      '// TODO(o/r#3): use the new option\n// TODO(https://github.com/o/r/issues/3#issuecomment-1)\n',
     );
   });
 
@@ -297,7 +299,7 @@ describe('run', () => {
 
   test.each([
     [['--format', 'xml'], 'Invalid value "xml" for --format. Use one of: text, json, markdown.'],
-    [['--rules', 'format,foo'], 'Invalid value "foo" for --rules. Use one of: format, invalid, issue, pull-request.'],
+    [['--rules', 'issue,foo'], 'Invalid value "foo" for --rules. Use one of: invalid, issue, pull-request.'],
     [['--pr-states', 'open'], 'Invalid value "open" for --pr-states. Use one of: merged, closed.'],
     [['--ref', 'o/r'], 'Invalid reference "o/r". Use owner/repo#123 or a GitHub URL.'],
     [['--cache-ttl', 'abc'], 'Invalid value "abc" for --cache-ttl. Use a number of minutes.'],

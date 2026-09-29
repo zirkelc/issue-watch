@@ -1,6 +1,5 @@
 import { defineRule, type Context, type Rule } from '@oxlint/plugins';
-import { evaluateFormat, type FormatOptions } from '../evaluate/format.js';
-import { evaluateInvalid, UNAVAILABLE_MESSAGE_ID, type InvalidOptions } from '../evaluate/invalid.js';
+import { evaluateInvalid, evaluateUnparsed, UNAVAILABLE_MESSAGE_ID, type InvalidOptions } from '../evaluate/invalid.js';
 import { DEFAULT_ISSUE_OPTIONS, evaluateIssue, REPORTED_ISSUE_STATES, type IssueOptions } from '../evaluate/issue.js';
 import {
   DEFAULT_PULL_REQUEST_OPTIONS,
@@ -45,46 +44,16 @@ const optionsOf = <OPTIONS extends object>(context: Context, defaults: OPTIONS):
   ...(context.options[0] as Partial<OPTIONS> | undefined),
 });
 
-export const formatRule = defineRule({
-  meta: {
-    type: 'problem',
-    fixable: 'code',
-    docs: { description: 'Enforce valid GitHub references in TODO comments.' },
-    messages: messagesFor(['invalidRef', 'missingRepo', 'unexpectedText', 'shortRef']),
-    schema: [
-      {
-        type: 'object',
-        properties: { expandShortRefs: { type: 'boolean' } },
-        additionalProperties: false,
-      },
-    ],
-    defaultOptions: [{ expandShortRefs: false }],
-  },
-  create(context) {
-    const options = optionsOf<FormatOptions>(context, { expandShortRefs: false });
-    const settings = getSettings(context.settings);
-
-    return {
-      Program() {
-        const found = findEntries(context, settings.keywords, projectRepository(context.cwd, settings));
-
-        for (const entryInFile of found) {
-          for (const finding of evaluateFormat(entryInFile.entry, options, Tools.LINT)) {
-            report(context, entryInFile, finding);
-          }
-        }
-      },
-    };
-  },
-});
-
 export const createInvalidRule = (provider: StatusProvider): Rule =>
   defineRule({
     meta: {
       type: 'problem',
       fixable: 'code',
-      docs: { description: 'Report references to GitHub issues or pull requests that do not exist or have moved.' },
-      messages: messagesFor(['notFound', 'moved', UNAVAILABLE_MESSAGE_ID]),
+      docs: {
+        description:
+          'Report references to GitHub issues or pull requests that cannot be parsed, do not exist or have moved.',
+      },
+      messages: messagesFor(['invalidRef', 'missingRepo', 'notFound', 'moved', UNAVAILABLE_MESSAGE_ID]),
       schema: [
         {
           type: 'object',
@@ -96,9 +65,16 @@ export const createInvalidRule = (provider: StatusProvider): Rule =>
     },
     create(context) {
       const options = optionsOf<InvalidOptions>(context, { reportUnavailable: true });
+      const settings = getSettings(context.settings);
 
       return {
         Program() {
+          const found = findEntries(context, settings.keywords, projectRepository(context.cwd, settings));
+          for (const entryInFile of found) {
+            for (const finding of evaluateUnparsed(entryInFile.entry, Tools.LINT))
+              report(context, entryInFile, finding);
+          }
+
           /** A missing token or network fails every reference, so it is reported once per file. */
           let reportedUnavailable = false;
 

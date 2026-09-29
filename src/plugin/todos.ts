@@ -60,7 +60,7 @@ export const findEntries = (
 };
 
 /**
- * Finds all entries with a valid reference. Entries without reference are left to the format rule.
+ * Finds all entries with a valid reference. Entries without reference are reported without network access.
  */
 export const findRefs = (
   context: Context,

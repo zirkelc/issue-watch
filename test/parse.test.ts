@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { parseRef, parseTodos, toRefUrl } from '../src/parse.js';
+import { parseRef, parseTodos } from '../src/parse.js';
 
 const token = (text: string) => ({ text, start: 0, end: text.length });
 
@@ -48,16 +48,6 @@ describe('parseRef', () => {
 
     // Assert
     expect(ref).toBe(undefined);
-  });
-});
-
-describe('toRefUrl', () => {
-  test(`should build issue url`, () => {
-    // Act
-    const url = toRefUrl({ owner: 'o', repo: 'r', number: 1 });
-
-    // Assert
-    expect(url).toBe('https://github.com/o/r/issues/1');
   });
 });
 
